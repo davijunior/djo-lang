@@ -1,0 +1,17 @@
+{% var titulo = "Contato" %}
+{% include:"_topo.djo.html" %}
+<h1>Contato</h1>
+{% if{ cond[method: == "POST"] %}
+  {% var msg = form:"mensagem" ?? "" %}
+  {% if{ cond[len:msg == 0] %}
+    {% status:400 %}
+    <p>Escreva alguma coisa.</p>
+  {% } else{ %}
+    <p>Obrigado! Você escreveu: <q>{{ msg }}</q></p>
+  {% } %}
+{% } %}
+<form method="post">
+  <textarea name="mensagem"></textarea>
+  <button>Enviar</button>
+</form>
+{% include:"_rodape.djo.html" %}

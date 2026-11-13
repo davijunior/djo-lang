@@ -1,0 +1,12 @@
+// mapas: chave -> valor, na ordem em que entraram
+map pessoa = {"nome": "Ana", "idade": 30}
+
+pessoa["cidade"] = "Rio"       // adiciona ou troca
+print pessoa["nome"]           // Ana
+print pessoa["nada"] ?? "sem"  // chave que não existe vale nil
+
+print has:pessoa:"idade"       // true
+print keys:pessoa              // ["nome", "idade", "cidade"]
+del:pessoa:"idade"
+print len:pessoa               // 2
+print pessoa

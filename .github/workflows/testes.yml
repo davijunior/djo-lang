@@ -1,0 +1,28 @@
+name: testes
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tags: ["", "nodb", "noweb", "nodb noweb nonet", "nonet"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet -tags "${{ matrix.tags }}" ./...
+      - run: go test -tags "${{ matrix.tags }}" ./...
+  corrida:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./...

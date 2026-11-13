@@ -1,0 +1,6 @@
+// Só as rotas daqui existem. O resto da pasta é código interno.
+Route.get:"/":"paginas/inicio.djo.html"
+Route.get:"/posts":{"html": "paginas/posts.djo.html", "agent": "agentes/posts.djo", "about": "Lista os posts", "returns": ["Post"], "cache": 10}
+Route.get:"/posts/{id}":{"html": "paginas/post.djo.html", "agent": "agentes/post.djo", "returns": "Post"}
+Route.action:"/posts/{id}/comentarios":"comentar":"Comentario"
+Route.static:"/assets":"publico"

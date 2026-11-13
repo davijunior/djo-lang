@@ -1,0 +1,12 @@
+{% abrir: %}
+{% include:"_topo.djo.html" %}
+<h1>Posts</h1>
+{% var posts = Db.query:"SELECT * FROM posts ORDER BY id DESC LIMIT 20" %}
+{% for{ each[p in posts] %}
+  <article>
+    <h2>{{ p["titulo"] }}</h2>
+    {% if{ cond[p["imagem"] != nil] %}<img src="/{{ p["imagem"] }}" width="200">{% } %}
+    <small>{{ Time.format:p["criado"]:"DD/MM/YYYY HH:mm" }}</small>
+  </article>
+{% } %}
+{% if{ cond[len:posts == 0] %}<p>Nenhum post ainda.</p>{% } %}

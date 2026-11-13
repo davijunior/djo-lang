@@ -1,0 +1,2 @@
+redirect:"/sobre"
+print "isto nunca aparece"

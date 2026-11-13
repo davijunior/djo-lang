@@ -1,0 +1,60 @@
+struct Post{
+    id[Int] nocall                // fora da chamada: Post:... nunca recebe o id
+    titulo[String]
+    conteudo[String]
+    publicado[Bool] = false       // valor padrão
+
+    f link
+        return "/post?id=" + str:self.id
+
+    f publicar
+        self.publicado = true
+
+    f renomear
+        params[novo[String]]
+        self.titulo = novo
+}
+
+var p = Post:"Olá":"primeiro texto"
+p.id = 7
+print p.link:                     // /post?id=7
+print p.publicado                 // false
+p.publicar:
+print p.publicado                 // true
+
+// '.' pula um campo e usa o padrão: Post sem título
+var q = Post:.:"só texto":true
+print q
+
+// os objetos são compartilhados, como as listas
+var r = p
+r.renomear:"Novo título"
+print p.titulo                    // Novo título
+
+// herança: sonof, sobrescrita e super
+struct Veiculo{
+    placa[String]
+    f descrever
+        return "veículo " + self.placa
+}
+
+struct Carro sonof Veiculo{
+    portas[Int] = 4
+    f descrever
+        return "carro, " + (super.descrever:)
+}
+
+var c = Carro:"ABC-123"
+print c.descrever:
+
+// interface: quem tem os métodos, serve (sem declarar nada)
+interface Descritivel{
+    f descrever
+}
+
+f mostrar
+    params[x[Descritivel]]
+    print x.descrever:
+
+mostrar:c                     // Carro tem 'descrever'
+print is:c:"Descritivel"      // true

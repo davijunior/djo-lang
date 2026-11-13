@@ -1,0 +1,23 @@
+// o core só declara: funções e structs usadas pelo site inteiro
+
+f abrir
+    Db.open:"blog.db"
+    Db.exec:"CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY, nome TEXT UNIQUE, senha TEXT)"
+    Db.exec:"CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY, titulo TEXT, imagem TEXT, criado INTEGER)"
+
+f logado
+    return Session.get:"usuario" != nil
+
+// páginas protegidas chamam exigirLogin:
+f exigirLogin
+    if
+        cond[not (logado:)]
+        Http.redirect:"/entrar"
+
+// formulários POST chamam checarToken:
+f checarToken
+    if
+        cond[not (Session.verify:(Http.form:"_token"))]
+        Http.status:403
+        print "token inválido"
+        Http.redirect:"/entrar"

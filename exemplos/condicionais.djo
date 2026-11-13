@@ -1,0 +1,47 @@
+// if / elif / else com chaves
+var idade = 20
+if{
+    cond[idade >= 18 and idade < 60]
+    print "adulto"
+}
+elif{
+    cond[idade >= 60]
+    print "idoso"
+}
+else{
+    print "menor"
+}
+
+// o mesmo, sem chaves (indentação), dentro de uma função
+f classifica
+    params[n[Int]]
+    if
+        cond[n < 0]
+        return "negativo"
+    elif
+        cond[n == 0]
+        return "zero"
+    else
+        return "positivo"
+
+print (classifica:-3)
+print (classifica:0)
+print (classifica:7)
+
+// match: vários valores por case
+f nota
+    params[n[Int]]
+    match
+        val[n]
+        case[10]
+            print "perfeito"
+        case[8, 9] print "ótimo"
+        else print "continue estudando"
+
+nota:10
+nota:9
+nota:3
+
+// pick escolhe um valor numa linha
+var logado = false
+print pick[not logado ; "entrar" ; "sair"]

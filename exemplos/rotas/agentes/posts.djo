@@ -1,0 +1,3 @@
+// Devolve os Post inteiros: o ?campos= recorta o que o agente não pediu.
+var lista = todos:
+Http.json:lista

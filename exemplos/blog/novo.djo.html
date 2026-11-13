@@ -1,0 +1,16 @@
+{% abrir: %}
+{% exigirLogin: %}
+{% if{ cond[Http.method: == "POST"] %}
+  {% checarToken: %}
+  {% var img = Http.upload:"imagem":"uploads" %}
+  {% Db.exec:"INSERT INTO posts (titulo, imagem, criado) VALUES (?, ?, ?)":[Http.form:"titulo", img, Time.now:] %}
+  {% Http.redirect:"/" %}
+{% } %}
+{% include:"_topo.djo.html" %}
+<h1>Novo post</h1>
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="_token" value="{{ Session.token: }}">
+  <input name="titulo" placeholder="título">
+  <input type="file" name="imagem" accept="image/*">
+  <button>Publicar</button>
+</form>

@@ -1,0 +1,24 @@
+# binário gerado por "go build" na raiz e os releases (vão para o GitHub Releases, não para o código)
+/djo
+/dist/
+
+# dados que os exemplos criam quando rodam
+_dados/
+_saida/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# testes e ferramentas
+*.test
+*.out
+*.prof
+
+# sistema e editores
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

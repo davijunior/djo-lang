@@ -1,0 +1,15 @@
+// Json: converte entre texto e valores da djo
+map pessoa = {"nome": "Ana", "tags": ["a", "b"], "ativa": true}
+
+var texto = Json.encode:pessoa
+print texto                      // {"nome":"Ana","tags":["a","b"],"ativa":true}
+print Json.pretty:pessoa         // o mesmo, com indentação
+
+var dados = Json.decode:texto
+print dados["tags"][1]           // b
+
+if
+    cond[Json.valid:"{quebrado"]
+    print "válido"
+else
+    print "JSON inválido"

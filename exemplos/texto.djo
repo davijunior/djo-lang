@@ -1,0 +1,16 @@
+// funções de texto
+var titulo = "  Olá, Mundo da Programação!  "
+print upper:(trim:titulo)             // OLÁ, MUNDO DA PROGRAMAÇÃO!
+print slug:titulo                     // ola-mundo-da-programacao
+print replace:(trim:titulo):"Mundo":"djo"
+print slice:(trim:titulo):0:3         // Olá
+print contains:titulo:"Mundo"         // true
+
+// números a partir de texto
+var pagina = int:"3" ?? 1
+var lixo = int:"abc" ?? 1
+print pagina + lixo                   // 4
+print round:3.14159:2                 // 3.14
+
+// monta uma data com zeros à esquerda
+print (padleft:"7":2:"0") + "/" + (padleft:"3":2:"0")   // 07/03

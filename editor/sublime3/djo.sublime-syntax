@@ -1,0 +1,126 @@
+%YAML 1.2
+---
+# Sintaxe da linguagem djo para Sublime Text 3 (build 3092+)
+name: djo
+file_extensions:
+  - djo
+scope: source.djo
+
+contexts:
+  main:
+    - include: comments
+    - include: strings
+    - include: function-definition
+    - include: action-definition
+    - include: struct-definition
+    - include: interface-definition
+    - include: keywords
+    - include: constants
+    - include: types
+    - include: function-call
+    - include: numbers
+    - include: operators
+
+  comments:
+    - match: //.*$
+      scope: comment.line.double-slash.djo
+      captures:
+        0: punctuation.definition.comment.djo
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.djo
+      push: string-body
+
+  string-body:
+    - meta_include_prototype: false
+    - meta_scope: string.quoted.double.djo
+    - match: '\\[nt"\\]'
+      scope: constant.character.escape.djo
+    - match: '\\.'
+      scope: invalid.illegal.escape.djo
+    - match: '"'
+      scope: punctuation.definition.string.end.djo
+      pop: true
+    - match: $
+      pop: true # string sem fechar não vaza para as próximas linhas
+
+  # f nome
+  function-definition:
+    - match: '\b(f)\s+([A-Za-z_]\w*)'
+      captures:
+        1: keyword.declaration.function.djo
+        2: entity.name.function.djo
+
+  action-definition:
+    - match: '\b(action)\s+([A-Za-z_]\w*)'
+      captures:
+        1: keyword.declaration.function.djo
+        2: entity.name.function.djo
+
+  struct-definition:
+    - match: '\b(struct)\s+([A-Z]\w*)(?:\s+(sonof)\s+([A-Z]\w*))?'
+      captures:
+        1: keyword.declaration.struct.djo
+        2: entity.name.struct.djo
+        3: keyword.declaration.struct.djo
+        4: entity.other.inherited-class.djo
+
+  interface-definition:
+    - match: '\b(interface)\s+([A-Z]\w*)'
+      captures:
+        1: keyword.declaration.interface.djo
+        2: entity.name.interface.djo
+
+  keywords:
+    - match: '\b(var|arr|map|action|print|input|params|cond|eng|return|struct|sonof|super)\b'
+      scope: keyword.other.djo
+    - match: '\b(while|until|for)\b'
+      scope: keyword.control.loop.djo
+    - match: '\b(if|elif|else|match)\b'
+      scope: keyword.control.conditional.djo
+    - match: '\b(val|case)(?=\[)'
+      scope: keyword.control.conditional.djo
+    - match: '\b(and|or|not)\b'
+      scope: keyword.operator.logical.djo
+    - match: '\bpick(?=\[)'
+      scope: support.function.builtin.djo
+    - match: '\bf\b'
+      scope: keyword.declaration.function.djo
+    - match: '\beach(?=\[)'
+      scope: keyword.control.loop.djo
+    - match: '\bnocall\b'
+      scope: storage.modifier.djo
+
+  constants:
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.djo
+    - match: '\bnil\b'
+      scope: constant.language.null.djo
+
+  types:
+    - match: '\b(Int|Float|String|Bool|Arr|Map|Any)\b'
+      scope: storage.type.djo
+
+  # nome:  |  nome:a:b  |  obj.metodo:a
+  function-call:
+    - match: '\b([A-Za-z_]\w*)(:)'
+      captures:
+        1: variable.function.djo
+        2: punctuation.separator.call.djo
+
+  numbers:
+    - match: '\b\d+\.\d+\b'
+      scope: constant.numeric.float.djo
+    - match: '\b\d+\b'
+      scope: constant.numeric.integer.djo
+
+  operators:
+    - match: '==|!=|<=|>=|<|>'
+      scope: keyword.operator.comparison.djo
+    - match: '\+\+|--'
+      scope: keyword.operator.increment.djo
+    - match: '[+\-*/%]'
+      scope: keyword.operator.arithmetic.djo
+    - match: '='
+      scope: keyword.operator.assignment.djo

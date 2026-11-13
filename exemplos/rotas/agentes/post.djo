@@ -1,0 +1,7 @@
+var p = achar:(int:(param:"id"))
+if{ cond[p == nil]
+    Http.status:404
+    Http.json:{"erro": "post não encontrado"}
+    return
+}
+Http.json:p

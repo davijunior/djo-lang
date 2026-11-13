@@ -1,0 +1,4 @@
+// página em modo código: o que o print escreve é a resposta
+setheader:"Content-Type":"text/plain; charset=utf-8"
+print "método: " + method:
+print "nome: " + (query:"nome" ?? "ninguém")

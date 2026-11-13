@@ -1,0 +1,22 @@
+{% var titulo = "Início" %}
+{% include:"_topo.djo.html" %}
+
+{% var nome = query:"nome" ?? "visitante" %}
+<h1>Olá, {{ nome }}!</h1>
+<p>Experimente <code>/?nome=&lt;b&gt;Ana&lt;/b&gt;</code>: o HTML é escapado sozinho.</p>
+
+{% arr posts = ["Primeiro post", "Segundo post", "Terceiro post"] %}
+<ul>
+{% var i = 0 %}
+{% while{ cond[i < len:posts] %}
+  <li>{{ i + 1 }}. {{ posts[i] }}</li>
+{% i++ } %}
+</ul>
+
+{% if{ cond[len:posts > 2] %}
+<p>Temos vários posts.</p>
+{% } else{ %}
+<p>Poucos posts.</p>
+{% } %}
+
+{% include:"_rodape.djo.html" %}

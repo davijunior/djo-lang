@@ -1,0 +1,34 @@
+// A regra de negócio mora aqui; tela e agente só apresentam.
+struct Post
+    id[Int]
+    titulo[String]
+    texto[String]
+
+struct Comentario
+    id[Int]
+    texto[String]
+
+f todos
+    var a = Post:1:"Ola":"primeiro post"
+    var b = Post:2:"Rotas":"declaradas em rotas.djo"
+    return [a, b]
+
+f achar
+    params[n[Int]]
+    var lista = todos:
+    for{ each[p in lista]
+        if{ cond[p.id == n] return p }
+    }
+    return nil
+
+action comentar
+    "Adiciona um comentário a um post"
+    params[id[Int], texto[String]]
+    if{ cond[achar:id == nil]
+        Http.status:404
+        return {"erro": "post não encontrado"}
+    }
+    var chave = str:id
+    File.append:"_dados/comentarios.txt":(chave + ": " + texto + "\n")
+    Http.status:201
+    return {"id": id, "texto": texto}

@@ -1,0 +1,29 @@
+//isso é um comentário
+
+
+//função sem parametros e sem encapsulamento
+f teste1
+    print "teste"
+
+
+//função sem parametros mas com encapsulamento
+f teste2{
+    print "teste dois"
+}
+
+//função com parametros
+
+f soma{
+    params[
+        n1[Int], //definindo a tipagem
+        n2[Int], //definindo a tipagem
+    ]
+
+    var soma = n1+n2
+    print soma
+
+}
+
+teste1: // "teste"
+teste2: // "teste dois"
+soma:3:2 // 5

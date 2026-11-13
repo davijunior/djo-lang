@@ -1,0 +1,6 @@
+<link rel="stylesheet" href="/assets/estilo.css">
+<h1>Posts</h1>
+{% var lista = todos: %}
+{% for{ each[p in lista] %}
+  <p><a href="/posts/{{ p.id }}">{{ p.titulo }}</a></p>
+{% } %}

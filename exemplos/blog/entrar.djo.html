@@ -1,0 +1,30 @@
+{% abrir: %}
+{% var erro = nil %}
+{% if{ cond[Http.method: == "POST"] %}
+  {% checarToken: %}
+  {% var u = Db.one:"SELECT * FROM usuarios WHERE nome = ?":[Http.form:"nome"] %}
+  {% if{ cond[u == nil] %}
+    {# primeiro acesso: o primeiro usuário vira o dono #}
+    {% if{ cond[(Db.one:"SELECT COUNT(*) AS n FROM usuarios")["n"] == 0 and len:(Http.form:"senha") >= 6] %}
+      {% Db.exec:"INSERT INTO usuarios (nome, senha) VALUES (?, ?)":[Http.form:"nome", Hash.password:(Http.form:"senha")] %}
+      {% u = Db.one:"SELECT * FROM usuarios WHERE nome = ?":[Http.form:"nome"] %}
+    {% } %}
+  {% } %}
+  {% if{ cond[u != nil and Hash.verify:(Http.form:"senha"):u["senha"]] %}
+    {% Session.renew: %}
+    {% Session.set:"usuario":u["nome"] %}
+    {% Http.redirect:"/" %}
+  {% } else{ %}
+    {% erro = "Nome ou senha inválidos (a senha tem 6+ caracteres)" %}
+  {% } %}
+{% } %}
+{% include:"_topo.djo.html" %}
+<h1>Entrar</h1>
+{% if{ cond[erro != nil] %}<p style="color:red">{{ erro }}</p>{% } %}
+<form method="post">
+  <input type="hidden" name="_token" value="{{ Session.token: }}">
+  <input name="nome" placeholder="nome">
+  <input name="senha" type="password" placeholder="senha">
+  <button>Entrar</button>
+</form>
+<p><small>O primeiro nome e senha digitados criam a conta do dono.</small></p>

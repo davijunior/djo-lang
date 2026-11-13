@@ -1,0 +1,3 @@
+{% var p = achar:(int:(param:"id")) %}
+{% if{ cond[p == nil] %}{% status:404 %}<p>Post não encontrado.</p>{% } %}
+{% if{ cond[p != nil] %}<h1>{{ p.titulo }}</h1><p>{{ p.texto }}</p>{% } %}

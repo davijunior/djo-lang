@@ -1,0 +1,11 @@
+// File: ler e gravar arquivos dentro da pasta do projeto
+File.write:"_saida/estado.json":(Json.encode:{"ligado": true, "tentativas": 0})
+
+var estado = Json.decode:(File.read:"_saida/estado.json")
+estado["tentativas"] = estado["tentativas"] + 1
+File.write:"_saida/estado.json":(Json.encode:estado)
+
+var agora = Time.now:
+File.append:"_saida/log.txt":(Time.format:agora:"HH:mm:ss") + " rodou\n"
+print File.read:"_saida/estado.json"
+print File.list:"_saida"
