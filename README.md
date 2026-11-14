@@ -31,8 +31,8 @@ print p.link:
 instalador) e pronto: é um executável só.
 
 ```
-curl -fsSL https://djolang.zfxsoftware.cloud/releases/v0.3.0/install.sh -o install.sh
-DJO_BASE_URL=https://djolang.zfxsoftware.cloud/releases/v0.3.0 DJO_VERSION=v0.3.0 sh install.sh
+curl -fsSL https://djolang.zfxsoftware.cloud/releases/v0.4.0/install.sh -o install.sh
+DJO_BASE_URL=https://djolang.zfxsoftware.cloud/releases/v0.4.0 DJO_VERSION=v0.4.0 sh install.sh
 ```
 
 O instalador escolhe o arquivo pelo seu sistema e processador, **confere o SHA256** antes de instalar e põe o
