@@ -72,7 +72,7 @@ Um **booster** é código pronto em djo que o projeto chama pelo nome: `djo boos
 2. [Structs](docs/02-structs.md): campos, valores padrão, métodos, composição e herança
 3. [Mapas e Json](docs/03-mapas-json.md)
 4. [Web](docs/04-web.md): servidor, templates, rotas (por arquivo e `rotas.djo`), `core/`, `Http`, sessões, CSRF, senhas e upload
-5. [Banco de dados](docs/05-banco.md): `Db` (SQLite)
+5. [Banco de dados](docs/05-banco.md): `Db` (SQLite, PostgreSQL e MySQL)
 6. [Referência](docs/06-referencia.md): todas as funções, `Time` e mensagens de erro
 7. [Builds e IoT](docs/07-builds.md): perfis `full`, `lite`, `noweb`, `tiny` e `nano` (3 MB)
 8. [Hardware](docs/08-iot.md): porta serial (`Serial`), `Time.sleep`

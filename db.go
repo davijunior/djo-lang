@@ -58,8 +58,17 @@ func openDB(path string) (*sql.DB, error) {
 
 // dbState é o banco aberto pela página atual.
 type dbState struct {
-	db *sql.DB
-	tx *sql.Tx
+	db   *sql.DB
+	tx   *sql.Tx
+	kind string // kindSQLite, kindPostgres ou kindMySQL
+}
+
+// sqlFor ajusta o SQL ao banco aberto: o "?" do djo vira $1, $2... no PostgreSQL.
+func (in *Interp) sqlFor(q string) string {
+	if in.dbs.kind == kindPostgres {
+		return pgPlaceholders(q)
+	}
+	return q
 }
 
 type dbRunner interface {
@@ -72,7 +81,7 @@ func (in *Interp) runner(fn string, line int) dbRunner {
 		return in.dbs.tx
 	}
 	if in.dbs.db == nil {
-		fail(line, "%s: abra o banco antes com Db.open:\"arquivo.db\"", fn)
+		fail(line, "%s: abra o banco antes com Db.open (arquivo .db ou endereço postgres:// / mysql://)", fn)
 	}
 	return in.dbs.db
 }
@@ -134,7 +143,7 @@ func (in *Interp) dbRows(a []any, fn string, line int, limit int) []*Map {
 	q, params := dbSQL(a, fn, line), dbParams(a, 1, fn, line)
 	ctx, cancel := context.WithTimeout(context.Background(), dbQueryLimit)
 	defer cancel()
-	rows, err := in.runner(fn, line).QueryContext(ctx, q, params...)
+	rows, err := in.runner(fn, line).QueryContext(ctx, in.sqlFor(q), params...)
 	if err != nil {
 		dbFail(fn, line, err)
 	}
@@ -172,6 +181,15 @@ func init() {
 	natives["Db"] = map[string]builtin{
 		"open": {1, func(in *Interp, env *Env, line int, a []any) any {
 			name := argStr(a, 0, line, "Db.open")
+			if kind, ok := remoteScheme(name); ok {
+				db, err := openRemote(kind, name)
+				if err != nil {
+					fail(line, "Db.open: %s", redact(err.Error(), name))
+				}
+				in.closeTx()
+				in.dbs.db, in.dbs.kind = db, kind
+				return nil
+			}
 			if !strings.HasSuffix(name, ".db") && !strings.HasSuffix(name, ".sqlite") {
 				fail(line, "Db.open: o arquivo precisa terminar em .db ou .sqlite")
 			}
@@ -187,22 +205,25 @@ func init() {
 				dbFail("Db.open", line, err)
 			}
 			in.closeTx()
-			in.dbs.db = db
+			in.dbs.db, in.dbs.kind = db, kindSQLite
 			return nil
 		}},
 		"exec": {-1, func(in *Interp, env *Env, line int, a []any) any {
 			q, params := dbSQL(a, "Db.exec", line), dbParams(a, 1, "Db.exec", line)
 			ctx, cancel := context.WithTimeout(context.Background(), dbQueryLimit)
 			defer cancel()
-			res, err := in.runner("Db.exec", line).ExecContext(ctx, q, params...)
+			res, err := in.runner("Db.exec", line).ExecContext(ctx, in.sqlFor(q), params...)
 			if err != nil {
 				dbFail("Db.exec", line, err)
 			}
 			m := newMap()
 			n, _ := res.RowsAffected()
-			id, _ := res.LastInsertId()
 			m.set("changes", n)
-			m.set("last_id", id)
+			if id, err := res.LastInsertId(); err == nil {
+				m.set("last_id", id)
+			} else {
+				m.set("last_id", nil) // PostgreSQL não tem: use INSERT ... RETURNING id com Db.one
+			}
 			return m
 		}},
 		"query": {-1, func(in *Interp, env *Env, line int, a []any) any {

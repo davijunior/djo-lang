@@ -5,7 +5,7 @@ tirando o que o dispositivo não usa. Cada versão é um **perfil**:
 
 | Perfil  | Tem                                          | Tamanho | Como              |
 |---------|----------------------------------------------|---------|-------------------|
-| `full`  | linguagem, servidor web, SQLite, `Http.get`  | ~11 MB  | padrão            |
+| `full`  | linguagem, servidor web, SQLite, PostgreSQL, MySQL, `Http.get` | ~14 MB  | padrão            |
 | `lite`  | linguagem, servidor web, `Http.get`          | ~7 MB   | `-tags nodb`      |
 | `noweb` | linguagem, SQLite, `Http.get`                | ~7,5 MB | `-tags noweb`     |
 | `tiny`  | linguagem e `Http.get`/`post` (só saída)     | ~7 MB   | `-tags "nodb noweb"` |
@@ -17,10 +17,10 @@ Em todos os perfis existem: a linguagem inteira (structs, interfaces, mapas, `fo
 | Recurso                                | full | lite | noweb | tiny | nano |
 |----------------------------------------|:----:|:----:|:-----:|:----:|:----:|
 | `djo serve`, `Http` de entrada, `Session`, upload | sim | sim | não | não | não |
-| `Db` (SQLite)                          | sim  | não  | sim   | não  | não  |
+| `Db` (SQLite, PostgreSQL, MySQL)        | sim  | não  | sim   | não  | não  |
 | `Http.get`, `Http.post`... (saída)     | sim  | sim  | sim   | sim  | não  |
 
-O que pesa: o SQLite custa uns 4 MB, o servidor web uns 3,5 MB, e o suporte a HTTPS/rede
+O que pesa: o SQLite custa uns 4 MB, o PostgreSQL uns 0,7 MB e o MySQL uns 0,5 MB (`-tags nopg` e `-tags nomysql` tiram cada um), o servidor web uns 3,5 MB, e o suporte a HTTPS/rede
 uns 3,6 MB. O `nano` tira tudo isso.
 
 Usar um recurso que o perfil não tem dá um erro claro:
