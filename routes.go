@@ -3,6 +3,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"os"
@@ -513,7 +515,7 @@ func (s *Server) serveRoutes(w http.ResponseWriter, r *http.Request, t *routeTab
 				file, ctype = rt.html, ""
 			} else {
 				w.Header().Set("Vary", "Accept")
-				http.Error(w, "406 esta rota não tem resposta nesse formato", http.StatusNotAcceptable)
+				http.Error(w, notAcceptableMsg(rt, len(t.manifest) > 0), http.StatusNotAcceptable)
 				return
 			}
 		}
@@ -558,6 +560,9 @@ func (s *Server) serveRoutes(w http.ResponseWriter, r *http.Request, t *routeTab
 				return
 			}
 			defer release()
+		}
+		if !isAgent && len(t.manifest) > 0 {
+			r = r.WithContext(context.WithValue(r.Context(), announceKey{}, true))
 		}
 		if !isAgent && !cacheable || method != http.MethodGet {
 			s.runPage(w, r, abs, http.StatusOK, params, ctype)
@@ -611,4 +616,58 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request, rt *route, 
 	fi, _ := f.Stat()
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, filepath.Base(real), fi.ModTime(), f)
+}
+
+// announceKey marca, no contexto da requisição, as páginas de tela de um site que também
+// tem face de agente: nelas o djo acrescenta o aviso de onde fica a porta dos agentes.
+type announceKey struct{}
+
+const (
+	announceHead = "<link rel=\"alternate\" type=\"application/json\" href=\"" + manifestPath + "\">\n" +
+		"<meta name=\"ai-manifest\" content=\"" + manifestPath + "\">\n"
+	announceBody = "\n<!-- Agente de IA: esta é a face para humanos. A sua porta é " + manifestPath +
+		" (o mapa do que existe), ou peça esta mesma URL com Accept: application/json. -->"
+)
+
+// announceAgents acrescenta ao HTML o aviso para agentes: um <link> e um <meta> no fim do
+// <head> e um comentário logo depois de abrir o <body>. Só mexe em página completa (com
+// </head> e <body>); fragmentos, e páginas que já têm o aviso, passam como estão.
+func announceAgents(b []byte) []byte {
+	low := bytes.ToLower(b)
+	if bytes.Contains(low, []byte("ai-manifest")) {
+		return b
+	}
+	hi := bytes.Index(low, []byte("</head>"))
+	bi := bytes.Index(low, []byte("<body"))
+	if hi < 0 || bi < hi {
+		return b
+	}
+	be := bytes.IndexByte(low[bi:], '>')
+	if be < 0 {
+		return b
+	}
+	be += bi + 1
+	out := make([]byte, 0, len(b)+len(announceHead)+len(announceBody))
+	out = append(out, b[:hi]...)
+	out = append(out, announceHead...)
+	out = append(out, b[hi:be]...)
+	out = append(out, announceBody...)
+	out = append(out, b[be:]...)
+	return out
+}
+
+// notAcceptableMsg é o corpo do 406: diz quais faces a rota tem e para onde um agente deve ir.
+func notAcceptableMsg(rt *route, manifest bool) string {
+	var b strings.Builder
+	b.WriteString("406 esta rota não tem resposta nesse formato\n")
+	switch {
+	case rt.agent == "" && rt.html != "":
+		b.WriteString("Esta rota é só para humanos (tela), sem resposta de agente.")
+	case rt.html == "" && rt.agent != "":
+		b.WriteString("Esta rota é só para agentes: peça com Accept: application/json.")
+	}
+	if manifest {
+		b.WriteString("\nO que existe para agentes está em " + manifestPath + ".")
+	}
+	return b.String() + "\n"
 }

@@ -12,7 +12,8 @@ Route.get:"/posts":{"html": "paginas/posts.djo.html", "agent": "agentes/posts.dj
 
 O navegador recebe `"html"`; quem pede `Accept: application/json` recebe `"agent"` (normalmente `Http.json:`).
 `"about"` é a descrição que vai para o manifesto. Rota sem `"agent"` não aparece no manifesto, e um agente que
-a peça recebe `406` em vez de HTML.
+a peça recebe `406` em vez de HTML. O corpo do `406` diz de que lado a rota é (só tela ou só agente) e onde
+fica o manifesto.
 
 ## `action`: uma ação com tipos fixos
 
@@ -99,6 +100,13 @@ chegar por qualquer página descobrir o resto. O manifesto é gerado do `rotas.d
 - `path_params` lista o que vem da URL, com o tipo declarado.
 - O manifesto só tem o que foi declarado para agentes. Páginas só de tela, arquivos estáticos e o resto do
   site não aparecem.
+- **A porta aparece também no HTML.** Muitos agentes só fazem um `GET` comum e leem a página. Por isso, em
+  um site que tem face de agente, o djo acrescenta a toda página de tela completa (a que tem `</head>` e
+  `<body>`) um `<link rel="alternate" type="application/json">` e um `<meta name="ai-manifest">` no fim do
+  `<head>`, e um comentário logo depois de abrir o `<body>`: "esta é a face para humanos; a sua porta é
+  `/.well-known/ai-manifest.json`, ou peça esta mesma URL com `Accept: application/json`". O humano não vê
+  nada. Fragmentos de HTML, páginas que já têm um `ai-manifest` e a face de agente ficam como estão, e um
+  site sem face de agente não anuncia nada.
 - `rel="ai-manifest"` e o caminho `/.well-known/ai-manifest.json` são uma convenção da djo, não um padrão
   registrado.
 

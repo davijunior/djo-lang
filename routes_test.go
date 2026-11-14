@@ -163,3 +163,77 @@ func TestRouteForaDoRotas(t *testing.T) {
 		t.Errorf("body = %q", body)
 	}
 }
+
+func TestAnunciaPortaDosAgentes(t *testing.T) {
+	ts := site(t, map[string]string{
+		"rotas.djo": `Route.get:"/":{"html": "paginas/inicio.djo.html"}
+Route.get:"/frag":{"html": "paginas/frag.djo.html", "agent": "agentes/frag.djo"}
+Route.get:"/pronta":{"html": "paginas/pronta.djo.html"}
+Route.get:"/dados":{"agent": "agentes/frag.djo"}
+`,
+		"paginas/inicio.djo.html": "<!doctype html><html><head><title>x</title></head><BODY class=\"a\"><p>oi</p></body></html>",
+		"paginas/frag.djo.html":   `<ul>sem head</ul>`,
+		"paginas/pronta.djo.html": `<html><head><meta name="ai-manifest" content="/x"></head><body>ok</body></html>`,
+		"agentes/frag.djo":        `print Json.encode:{"a": 1}`,
+	})
+	get := func(p, accept string) (int, string) {
+		req, _ := http.NewRequest("GET", ts.URL+p, nil)
+		req.Header.Set("Accept", accept)
+		resp, err := noRedirect.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	_, h := get("/", "text/html")
+	for _, want := range []string{
+		`<link rel="alternate" type="application/json" href="/.well-known/ai-manifest.json">`,
+		`<meta name="ai-manifest" content="/.well-known/ai-manifest.json">`,
+		"<BODY class=\"a\">\n<!-- Agente de IA:",
+		`Accept: application/json. --><p>oi</p>`,
+	} {
+		if !strings.Contains(h, want) {
+			t.Errorf("falta %q em:\n%s", want, h)
+		}
+	}
+	if i, j := strings.Index(h, "<meta name=\"ai-manifest\""), strings.Index(h, "</head>"); i < 0 || i > j {
+		t.Errorf("o aviso deve ficar dentro do <head>:\n%s", h)
+	}
+	if _, f := get("/frag", "text/html"); f != `<ul>sem head</ul>` {
+		t.Errorf("fragmento não deve mudar: %q", f)
+	}
+	if _, p := get("/pronta", "text/html"); strings.Count(p, "ai-manifest") != 1 || strings.Contains(p, "Agente de IA") {
+		t.Errorf("página que já avisa não deve ganhar de novo: %q", p)
+	}
+	if _, a := get("/frag", "application/json"); strings.Contains(a, "Agente de IA") || !strings.Contains(a, `"a"`) {
+		t.Errorf("a face de agente não leva o aviso: %q", a)
+	}
+
+	// 406 que ensina
+	code, m := get("/pronta", "application/json")
+	if code != 406 || !strings.Contains(m, "só para humanos") || !strings.Contains(m, "/.well-known/ai-manifest.json") {
+		t.Errorf("406 de rota só de tela: %d %q", code, m)
+	}
+	code, m = get("/dados", "text/html")
+	if code != 406 || !strings.Contains(m, "só para agentes") || !strings.Contains(m, "Accept: application/json") {
+		t.Errorf("406 de rota só de agente: %d %q", code, m)
+	}
+}
+
+func TestSemAgentesSemAviso(t *testing.T) {
+	ts := site(t, map[string]string{
+		"rotas.djo":               `Route.get:"/":"paginas/inicio.djo.html"`,
+		"paginas/inicio.djo.html": "<html><head></head><body>oi</body></html>",
+	})
+	resp, err := http.Get(ts.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if strings.Contains(string(b), "ai-manifest") || strings.Contains(string(b), "Agente de IA") {
+		t.Errorf("site sem face de agente não deve anunciar nada: %s", b)
+	}
+}

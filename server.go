@@ -273,8 +273,12 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 	for _, c := range in.resp.cookies {
 		http.SetCookie(w, c)
 	}
+	body := out.buf.Bytes()
+	if r.Context().Value(announceKey{}) != nil && strings.HasPrefix(h.Get("Content-Type"), "text/html") {
+		body = announceAgents(body)
+	}
 	w.WriteHeader(in.resp.status)
-	w.Write(out.buf.Bytes())
+	w.Write(body)
 }
 
 func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) {

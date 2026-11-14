@@ -94,7 +94,8 @@ Route.static:"/assets":"publico"
   `application/json` sem `text/html` vai para `"agent"`, o resto vai para `"html"`. A resposta leva
   `Vary: Accept`, e a face de agente responde `application/json` por padrão.
 - Pedir um formato que a rota não tem dá **406**, em vez de entregar a outra face (um agente nunca recebe
-  HTML para raspar). Sem preferência (`Accept` vazio ou `*/*`), vale a face que existe; se existem as duas, a tela.
+  HTML para raspar). O corpo do 406 diz se a rota é só de tela ou só de agente e, se o site tem manifesto,
+  onde ele fica. Sem preferência (`Accept` vazio ou `*/*`), vale a face que existe; se existem as duas, a tela.
 - No `-dev`, `?formato=agent` ou `?formato=html` força uma face, para testar no navegador.
 - Método errado em caminho conhecido dá **405** com `Allow`. `HEAD` vale como `GET`.
 - **Mais específica vence**, não importa a ordem: texto fixo, depois `{nome}`, depois `{...nome}`.
