@@ -27,7 +27,7 @@ O mapeamento de URL para arquivo é igual ao do PHP:
 | `/estilo.css`| arquivo estático |
 
 - Arquivos e pastas que começam com `.` ou `_` nunca são servidos (use `_topo.djo.html`
-  para pedaços reutilizáveis, e `_dados/` para arquivos gravados com `File`) e a pasta `core/` também não.
+  para pedaços reutilizáveis, e `_dados/` para arquivos gravados com `File`) e as pastas `core/` e `boosters/` também não.
 - `404.djo.html` na raiz personaliza a página de erro.
 - Sem `-dev`, erros de execução mostram só uma página genérica (o detalhe vai para o log).
 - Links simbólicos que saem da pasta do site são ignorados.

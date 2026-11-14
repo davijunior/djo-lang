@@ -154,6 +154,21 @@ var t = Time.parse:"2025-01-31":"YYYY-MM-DD"
 print (Time.date:t)["month"]                       // 1
 ```
 
+## Boosters
+
+| Comando | O que faz |
+|---|---|
+| `djo booster list` | lista os boosters do projeto |
+| `djo booster search [texto]` | procura no registro |
+| `djo booster create [-perm Http,File] nome` | cria a estrutura de um booster novo |
+| `djo booster add nome[@versao]` | baixa do registro, confere o SHA256 e instala em `boosters/` (anota no `boosters.lock`) |
+| `djo booster add endereço -sha256 X` / `add pasta` | instala de um endereço https ou de uma pasta |
+| `djo booster pack [-registro pasta] pasta` | empacota um booster para publicar |
+| `djo booster remove nome` | remove |
+| `djo booster verify` | confere as pastas com o `boosters.lock` |
+
+No código: `nome.função:argumento`, por exemplo `markdown.render:texto`. Um booster só enxerga o próprio código, e o projeto só alcança as `f` do `main.djo` dele. Veja [Boosters](12-boosters.md).
+
 ## Mensagens de erro
 
 Todo erro traz a linha: `erro (linha 12): ...`. Os mais comuns:
@@ -166,6 +181,7 @@ Todo erro traz a linha: `erro (linha 12): ...`. Os mais comuns:
 | `a condição do if precisa ser Bool, mas é Int` | condição que não é `true`/`false` |
 | `'super' só existe dentro de método de uma struct com sonof` | `super` fora de lugar |
 | `o core só declara structs e funções` | código solto em `core/` |
+| `o booster 'x' usa File mas não declarou essa permissão` | falta a permissão no `booster.json` (veja [Boosters](12-boosters.md)) |
 | `a página demorou demais` | passou do limite de passos |
 
 ## Ainda não existe

@@ -14,6 +14,9 @@ import (
 
 // loadCore registra as declarações de root/core/**/*.djo no interpretador.
 func (in *Interp) loadCore(root string) error {
+	if err := in.loadBoosters(root); err != nil {
+		return err
+	}
 	dir := filepath.Join(root, "core")
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return nil // projeto sem core

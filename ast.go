@@ -128,13 +128,14 @@ type (
 	ExprStmt   struct{ X Expr }
 	Param      struct{ Name, Type string }
 	FuncDecl   struct {
-		Name   string
-		Params []Param
-		Body   []Stmt
-		Line   int
-		Owner  *StructDecl // struct que declarou o método
-		Action bool        // declarada com "action": também vira endpoint de agente
-		Doc    string      // texto de descrição (primeira linha da action, entre aspas)
+		Name    string
+		Params  []Param
+		Body    []Stmt
+		Line    int
+		Owner   *StructDecl // struct que declarou o método
+		Action  bool        // declarada com "action": também vira endpoint de agente
+		Doc     string      // texto de descrição (primeira linha da action, entre aspas)
+		Booster *booster    // booster que declarou a função (nil no core e nas páginas)
 	}
 	// FieldDecl: nome[Tipo] nocall = padrão
 	FieldDecl struct {

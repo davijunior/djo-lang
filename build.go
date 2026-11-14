@@ -95,6 +95,7 @@ func checkProject(dir string, files []string) []string {
 	if err := NewInterp(io.Discard).loadCore(dir); err != nil {
 		problems = append(problems, err.Error())
 	}
+	problems = append(problems, verifyBoosters(dir)...)
 	if err := checkRoutes(dir); err != nil {
 		problems = append(problems, err.Error())
 	}

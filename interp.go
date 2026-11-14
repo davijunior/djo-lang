@@ -74,6 +74,8 @@ type Interp struct {
 	steps, maxSteps int   // maxSteps>0 limita a execução (servidor)
 	Echo            bool  // REPL: mostra o valor de expressões soltas
 	dbs             dbState
+	boosters        map[string]*booster // boosters/ do projeto, pelo nome
+	cur             *booster            // booster em execução (nil: core ou página)
 }
 
 const maxDepth = 2000
@@ -454,6 +456,21 @@ func (in *Interp) eval(e Expr, env *Env) any {
 }
 
 func (in *Interp) call(n *Call, env *Env) any {
+	if in.cur != nil { // dentro de um booster: só enxerga as próprias funções (o core não)
+		if fd, ok := in.cur.funcs[n.Name]; ok {
+			return in.invoke(fd, n.Name, n.Args, env, nil, n.Line)
+		}
+		if fd, ok := in.cur.priv[n.Name]; ok {
+			return in.invoke(fd, n.Name, n.Args, env, nil, n.Line)
+		}
+		if sd, ok := in.structs[n.Name]; ok { // in.structs já é o mundo do booster
+			return in.construct(sd, n, env)
+		}
+		if b, ok := builtins[n.Name]; ok {
+			return in.callBuiltin(b, n, env)
+		}
+		fail(n.Line, "o booster '%s' não tem a função '%s' (um booster não enxerga o core do projeto)", in.cur.name, n.Name)
+	}
 	if fd, ok := in.funcs[n.Name]; ok {
 		return in.invoke(fd, n.Name, n.Args, env, nil, n.Line)
 	}
@@ -461,17 +478,21 @@ func (in *Interp) call(n *Call, env *Env) any {
 		return in.construct(sd, n, env)
 	}
 	if b, ok := builtins[n.Name]; ok {
-		if b.args >= 0 && len(n.Args) != b.args {
-			fail(n.Line, "'%s' espera %d argumento(s), recebeu %d", n.Name, b.args, len(n.Args))
-		}
-		args := make([]any, len(n.Args))
-		for i, a := range n.Args {
-			args[i] = in.eval(a, env)
-		}
-		return b.fn(in, env, n.Line, args)
+		return in.callBuiltin(b, n, env)
 	}
 	fail(n.Line, "função ou struct '%s' não existe", n.Name)
 	return nil
+}
+
+func (in *Interp) callBuiltin(b builtin, n *Call, env *Env) any {
+	if b.args >= 0 && len(n.Args) != b.args {
+		fail(n.Line, "'%s' espera %d argumento(s), recebeu %d", n.Name, b.args, len(n.Args))
+	}
+	args := make([]any, len(n.Args))
+	for i, a := range n.Args {
+		args[i] = in.eval(a, env)
+	}
+	return b.fn(in, env, n.Line, args)
 }
 
 // invoke executa uma função ou método; self é a instância (nil em funções).
@@ -501,6 +522,11 @@ func (in *Interp) invoke(fd *FuncDecl, label string, args []Expr, env *Env, self
 	defer func() { in.depth-- }()
 	if in.depth > maxDepth {
 		fail(line, "recursão funda demais em '%s'", label)
+	}
+	if fd.Booster != nil { // os argumentos já foram avaliados fora do booster
+		prev, prevS, prevI := in.cur, in.structs, in.interfaces
+		in.cur, in.structs, in.interfaces = fd.Booster, fd.Booster.structs, fd.Booster.interfaces
+		defer func() { in.cur, in.structs, in.interfaces = prev, prevS, prevI }()
 	}
 	ret, _ := in.execBlock(fd.Body, local)
 	return ret

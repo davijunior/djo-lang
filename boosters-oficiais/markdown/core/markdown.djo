@@ -1,0 +1,123 @@
+// Renderizador de Markdown, escrito em djo. Cobre o que a documentação usa:
+// títulos, parágrafos, listas, tabelas, blocos de código, **negrito**,
+// `código` e [links](arquivo.md).
+
+// "04-web.md" vira "/docs/web"
+
+f md_destino
+    params[url[String]]
+    if
+        cond[ends:url:".md"]
+        var nome = slice:url:0:(len:url) - 3
+        var partes = split:nome:"/"
+        nome = partes[(len:partes) - 1]
+        if{ cond[(len:nome) > 3 and (slice:nome:2:3) == "-"] nome = slice:nome:3 }
+        return "/docs/" + nome
+    return url
+
+// texto corrido: `código`, **negrito**, [texto](url). Tudo o mais é escapado.
+
+f md_inline
+    params[s[String]]
+    arr cs = []
+    for{ each[ch in s] push:cs:ch }
+    var n = len:cs
+    var out = ""
+    var i = 0
+    while
+        cond[i < n]
+        var c = cs[i]
+        var prox = pick[i + 1 < n ; cs[i + 1] ; ""]
+        if
+            cond[c == "`"]
+            var j = i + 1
+            while{ cond[j < n and cs[j] != "`"] j++ }
+            if
+                cond[j < n]
+                out = out + "<code>" + (escape:(join:(slice:cs:(i + 1):j):"")) + "</code>"
+                i = j + 1
+            else
+                out = out + "`"
+                i++
+        elif
+            cond[c == "*" and prox == "*"]
+            var j = i + 2
+            while{ cond[j + 1 < n and not (cs[j] == "*" and cs[j + 1] == "*")] j++ }
+            if
+                cond[j + 1 < n]
+                out = out + "<strong>" + (md_inline:(join:(slice:cs:(i + 2):j):"")) + "</strong>"
+                i = j + 2
+            else
+                out = out + "**"
+                i = i + 2
+        elif
+            cond[c == "*" and prox != " " and prox != "" and prox != "*"]
+            var j = i + 1
+            while{ cond[j < n and cs[j] != "*"] j++ }
+            if
+                cond[j < n and cs[j - 1] != " "]
+                out = out + "<em>" + (md_inline:(join:(slice:cs:(i + 1):j):"")) + "</em>"
+                i = j + 1
+            else
+                out = out + "*"
+                i++
+        elif
+            cond[c == "["]
+            var j = i + 1
+            while{ cond[j < n and cs[j] != "]"] j++ }
+            var ok = j + 1 < n and cs[j + 1] == "("
+            var k = j + 2
+            if{ cond[ok] while{ cond[k < n and cs[k] != ")"] k++ } }
+            if
+                cond[ok and k < n]
+                var rotulo = md_inline:(join:(slice:cs:(i + 1):j):"")
+                var url = join:(slice:cs:(j + 2):k):""
+                out = out + "<a href=\"" + (escape:(md_destino:url)) + "\">" + rotulo + "</a>"
+                i = k + 1
+            else
+                out = out + "["
+                i++
+        else
+            out = out + (escape:c)
+            i++
+    return out
+
+// o bloco de código é djo, shell ou HTML?
+
+f md_celulas
+    params[linha[String]]
+    var t = trim:linha
+    if{ cond[starts:t:"|"] t = slice:t:1 }
+    if{ cond[ends:t:"|"] t = slice:t:0:(len:t) - 1 }
+    arr cels = []
+    for{ each[c in split:t:"|"] push:cels:(trim:c) }
+    return cels
+
+f md_tabela
+    params[linhas[Arr]]
+    var out = "<div class=\"tabela\"><table>\n<thead><tr>"
+    for{ each[c in md_celulas:linhas[0]] out = out + "<th>" + (md_inline:c) + "</th>" }
+    out = out + "</tr></thead>\n<tbody>\n"
+    for{
+        each[i, l in linhas]
+        if
+            cond[i >= 2]
+            out = out + "<tr>"
+            for{ each[c in md_celulas:l] out = out + "<td>" + (md_inline:c) + "</td>" }
+            out = out + "</tr>\n"
+    }
+    return out + "</tbody></table></div>\n"
+
+// "1. texto" -> o texto, ou nil
+
+f md_numerada
+    params[l[String]]
+    var k = index:l:". "
+    if{ cond[k > 0 and (int:(slice:l:0:k)) != nil] return slice:l:(k + 2) }
+    return nil
+
+f md_inicio_bloco
+    params[l[String]]
+    return starts:l:"```" or starts:l:"#" or starts:l:"|" or starts:l:"- " or (md_numerada:l) != nil or (len:(trim:l)) == 0
+
+// Devolve {"html": ..., "titulo": ..., "toc": [{"id", "titulo"}]}

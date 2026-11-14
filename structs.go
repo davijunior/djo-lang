@@ -277,6 +277,7 @@ func (in *Interp) methodCall(n *MethodCall, env *Env) any {
 	if id, ok := n.X.(*Ident); ok {
 		if ns, isNative := natives[id.Name]; isNative {
 			if _, shadow := env.get(id.Name); !shadow {
+				in.checkPerm(id.Name, n.Line)
 				b, ok := ns[n.Name]
 				if !ok {
 					fail(n.Line, "%s não tem a função '%s'", id.Name, n.Name)
@@ -289,6 +290,17 @@ func (in *Interp) methodCall(n *MethodCall, env *Env) any {
 					args[i] = in.eval(a, env)
 				}
 				return b.fn(in, env, n.Line, args)
+			}
+		}
+	}
+	if id, ok := n.X.(*Ident); ok && in.cur == nil {
+		if bo, isBooster := in.boosters[id.Name]; isBooster {
+			if _, shadow := env.get(id.Name); !shadow {
+				fd, ok := bo.funcs[n.Name]
+				if !ok {
+					fail(n.Line, "o booster %s não tem a função '%s'", id.Name, n.Name)
+				}
+				return in.invoke(fd, id.Name+"."+n.Name, n.Args, env, nil, n.Line)
 			}
 		}
 	}

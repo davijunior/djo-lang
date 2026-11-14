@@ -63,6 +63,9 @@ func NewServer(dir string, dev bool) (*Server, error) {
 	if fi, err := os.Stat(real); err != nil || !fi.IsDir() {
 		return nil, fmt.Errorf("%s não é uma pasta", dir)
 	}
+	if p := verifyBoosters(real); len(p) > 0 {
+		return nil, fmt.Errorf("%s", strings.Join(p, "\n"))
+	}
 	srv := &Server{root: real, realRoot: real, dev: dev, maxSteps: 10_000_000, lane: newLane(0, 50)}
 	if _, err := srv.table(); err != nil {
 		return nil, err
@@ -95,8 +98,8 @@ func hidden(urlPath string) bool {
 			return true // bancos de dados nunca são servidos
 		}
 	}
-	if urlPath == "/core" || strings.HasPrefix(urlPath, "/core/") {
-		return true // o core do sistema nunca é servido
+	if urlPath == "/core" || strings.HasPrefix(urlPath, "/core/") || urlPath == "/boosters" || strings.HasPrefix(urlPath, "/boosters/") {
+		return true // o core do sistema e os boosters nunca são servidos
 	}
 	for _, seg := range strings.Split(urlPath, "/") {
 		if strings.HasPrefix(seg, ".") || strings.HasPrefix(seg, "_") || strings.HasPrefix(seg, "[") {
@@ -372,7 +375,7 @@ func (s *Server) resolve(dir string, segs []string, params map[string]string) st
 		return pageIn(dir, "index")
 	}
 	seg, rest := segs[0], segs[1:]
-	if seg == "" || seg == "core" && dir == s.root {
+	if seg == "" || (seg == "core" || seg == "boosters") && dir == s.root {
 		return ""
 	}
 	// 1. nome exato (pasta; o arquivo exato de um segmento só é a última parte)

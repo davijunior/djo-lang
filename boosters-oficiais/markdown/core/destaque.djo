@@ -1,0 +1,75 @@
+// Realce de sintaxe da djo, escrito em djo.
+// Recebe o código-fonte e devolve HTML já escapado, com <span class="t-...">.
+
+f palavras
+    return ["f", "var", "arr", "map", "print", "params", "return", "true", "false", "nil", "input", "cond", "while", "until", "for", "eng", "if", "elif", "else", "match", "and", "or", "not", "pick", "struct", "sonof", "interface", "super", "nocall", "each", "in", "val", "case", "self"]
+
+f letras
+    return "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_áàâãäéèêíìîóòôõöúùûüçÁÀÂÃÉÊÍÓÔÕÚÇ"
+
+f digitos
+    return "0123456789"
+
+f span
+    params[classe[String], texto[String]]
+    return "<span class=\"t-" + classe + "\">" + (escape:texto) + "</span>"
+
+f destacar
+    params[fonte[String]]
+    arr cs = []
+    for{ each[ch in fonte] push:cs:ch }
+    var n = len:cs
+    var ks = palavras:
+    var L = letras:
+    var D = digitos:
+    var out = ""
+    var i = 0
+    while
+        cond[i < n]
+        var c = cs[i]
+        var prox = pick[i + 1 < n ; cs[i + 1] ; ""]
+        if
+            cond[c == "/" and prox == "/"]
+            var j = i
+            while{ cond[j < n and cs[j] != "\n"] j++ }
+            out = out + (span:"c":(join:(slice:cs:i:j):""))
+            i = j
+        elif
+            cond[c == "\""]
+            var j = i + 1
+            while{
+                cond[j < n and cs[j] != "\""]
+                if{ cond[cs[j] == "\\" and j + 1 < n] j++ }
+                j++
+            }
+            j++
+            out = out + (span:"s":(join:(slice:cs:i:j):""))
+            i = j
+        elif
+            cond[contains:D:c]
+            var j = i
+            while{ cond[j < n and ((contains:D:cs[j]) or cs[j] == ".")] j++ }
+            out = out + (span:"n":(join:(slice:cs:i:j):""))
+            i = j
+        elif
+            cond[contains:L:c]
+            var j = i
+            while{ cond[j < n and ((contains:L:cs[j]) or (contains:D:cs[j]))] j++ }
+            var w = join:(slice:cs:i:j):""
+            var depois = pick[j < n ; cs[j] ; ""]
+            if
+                cond[contains:ks:w]
+                out = out + (span:"k":w)
+            elif
+                cond[(upper:(slice:w:0:1)) == (slice:w:0:1)]
+                out = out + (span:"y":w)
+            elif
+                cond[depois == ":"]
+                out = out + (span:"f":w)
+            else
+                out = out + (escape:w)
+            i = j
+        else
+            out = out + (escape:c)
+            i++
+    return out

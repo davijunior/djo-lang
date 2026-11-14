@@ -57,7 +57,7 @@ rascunhos
 ## Verificação
 
 Antes de empacotar, o `djo build` lê **todo** o código: arquivos `.djo`, templates `.djo.html` e a regra do
-`core/` (que só declara). Com erro de sintaxe, nada é gerado e o erro aparece com o arquivo e a linha:
+`core/` (que só declara) e os `boosters/` (que também vão para dentro do executável). Com erro de sintaxe, nada é gerado e o erro aparece com o arquivo e a linha:
 
 ```
 djo build: 1 erro(s) no código, nada foi gerado:

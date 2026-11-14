@@ -1,0 +1,132 @@
+// API do booster markdown (o main.djo). O que não está aqui fica em core/ e só o booster enxerga.
+
+f codigo
+    params[fonte[String]]
+    var t = trim:fonte
+    var shell = false
+    for{
+        each[p in ["djo ", "$ ", "go ", "CGO_", "./", "scp ", "PORT=", "DJO_", "git ", "curl ", "GET ", "POST ", "sudo ", "sha256sum", "id,titulo", "{", "[", "# "]]
+        if{ cond[starts:t:p] shell = true }
+    }
+    var html = starts:t:"<" or starts:t:"{%" or starts:t:"{{"
+    var classe = "djo"
+    var corpo = ""
+    if
+        cond[shell]
+        classe = "sh"
+        // shell: só realça os comentários
+        arr linhas = []
+        for{
+            each[l in split:fonte:"\n"]
+            var k = index:l:"#"
+            if
+                cond[k >= 0]
+                push:linhas:((escape:(slice:l:0:k)) + "<span class=\"t-c\">" + (escape:(slice:l:k)) + "</span>")
+            else
+                push:linhas:(escape:l)
+        }
+        corpo = join:linhas:"\n"
+    elif
+        cond[html]
+        classe = "html"
+        corpo = escape:fonte
+    else
+        corpo = destacar:fonte
+    return "<pre class=\"code code-" + classe + "\"><code>" + corpo + "</code></pre>\n"
+
+f render
+    params[texto[String]]
+    var linhas = split:texto:"\n"
+    var n = len:linhas
+    var out = ""
+    var titulo = ""
+    arr toc = []
+    var i = 0
+    while
+        cond[i < n]
+        var l = linhas[i]
+        if
+            cond[starts:l:"```"]
+            arr bloco = []
+            i++
+            while{
+                cond[i < n and not (starts:linhas[i]:"```")]
+                push:bloco:linhas[i]
+                i++
+            }
+            i++
+            out = out + (codigo:(join:bloco:"\n"))
+        elif
+            cond[starts:l:"### "]
+            var t = slice:l:4
+            out = out + "<h3 id=\"" + (slug:t) + "\">" + (md_inline:t) + "</h3>\n"
+            i++
+        elif
+            cond[starts:l:"## "]
+            var t = slice:l:3
+            push:toc:{"id": slug:t, "titulo": md_inline:t}
+            out = out + "<h2 id=\"" + (slug:t) + "\">" + (md_inline:t) + "</h2>\n"
+            i++
+        elif
+            cond[starts:l:"# "]
+            titulo = slice:l:2
+            i++
+        elif
+            cond[starts:l:"|"]
+            arr tab = []
+            while{
+                cond[i < n and starts:linhas[i]:"|"]
+                push:tab:linhas[i]
+                i++
+            }
+            out = out + (md_tabela:tab)
+        elif
+            cond[starts:l:"- "]
+            arr itens = []
+            while
+                cond[i < n and (starts:linhas[i]:"- " or not (md_inicio_bloco:linhas[i]))]
+                if
+                    cond[starts:linhas[i]:"- "]
+                    push:itens:(slice:linhas[i]:2)
+                else
+                    itens[(len:itens) - 1] = itens[(len:itens) - 1] + " " + (trim:linhas[i])
+                i++
+            out = out + "<ul>\n"
+            for{ each[it in itens] out = out + "<li>" + (md_inline:it) + "</li>\n" }
+            out = out + "</ul>\n"
+        elif
+            cond[(md_numerada:l) != nil]
+            arr itens = []
+            while
+                cond[i < n and ((md_numerada:linhas[i]) != nil or starts:linhas[i]:" ")]
+                var li = linhas[i]
+                if
+                    cond[(md_numerada:li) != nil]
+                    push:itens:(md_inline:(md_numerada:li))
+                elif
+                    cond[starts:(trim:li):"```"]
+                    arr bl = []
+                    i++
+                    while
+                        cond[i < n and not (starts:(trim:linhas[i]):"```")]
+                        push:bl:(slice:linhas[i]:(min:3:(len:linhas[i]) - (len:(trim:linhas[i]))))
+                        i++
+                    itens[(len:itens) - 1] = itens[(len:itens) - 1] + (codigo:(join:bl:"\n"))
+                else
+                    itens[(len:itens) - 1] = itens[(len:itens) - 1] + " " + (md_inline:(trim:li))
+                i++
+            out = out + "<ol>\n"
+            for{ each[it in itens] out = out + "<li>" + it + "</li>\n" }
+            out = out + "</ol>\n"
+        elif
+            cond[(len:(trim:l)) == 0]
+            i++
+        else
+            arr par = []
+            while{
+                cond[i < n and not (md_inicio_bloco:linhas[i])]
+                push:par:(trim:linhas[i])
+                i++
+            }
+            out = out + "<p>" + (md_inline:(join:par:" ")) + "</p>\n"
+    return {"html": out, "titulo": titulo, "toc": toc}

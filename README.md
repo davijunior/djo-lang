@@ -57,9 +57,12 @@ djo new [-modelo site|script|iot] pasta   # cria um projeto pronto para rodar
 djo serve [-addr host:porta] [-dev] [pasta]
 djo build [-o app] [-runtime djo-de-outra-maquina] [pasta]   # um executável só com o site
 djo agent [-raw] [-post '{...}'] endereço   # vê o site como um agente (manifesto e rotas)
+djo booster search|add nome|list|create nome|pack|remove nome|verify   # código pronto que o projeto chama pelo nome
 ```
 
 `djo new meusite` cria um site com tela, face de agente, manifesto e uma `action`, e já diz os próximos passos. Os modelos `script` (um arquivo) e `iot` (leitura de sensor na serial) também existem. Ele recusa uma pasta que já tem arquivos.
+
+Um **booster** é código pronto em djo que o projeto chama pelo nome: `djo booster add markdown` (baixa do registro, confere o SHA256) e depois `markdown.render:texto`. Ele só enxerga o próprio código (nunca o do projeto), declara as permissões de que precisa e fica travado por SHA256 no `boosters.lock`. `djo booster create nome` gera a estrutura de um novo. Veja [Boosters](docs/12-boosters.md).
 
 `djo serve` usa `localhost:8080` por padrão. Com `-dev`, os erros aparecem na página. Com `-allow-private`, as páginas podem chamar endereços da rede local com `Http.get`. `-agent-conc` e `-agent-rate` limitam o tráfego de agentes para ele não atrapalhar as pessoas (veja [Agentes](docs/10-agentes.md)).
 
@@ -76,6 +79,7 @@ djo agent [-raw] [-post '{...}'] endereço   # vê o site como um agente (manife
 9. [Empacotar](docs/09-empacotar.md): `djo build` gera um executável único com o seu site
 10. [Agentes](docs/10-agentes.md): `action`, rotas para agentes e o manifesto
 11. [Releases](docs/11-releases.md): instalar sem Go e publicar uma versão
+12. [Boosters](docs/12-boosters.md): código pronto que o projeto chama pelo nome (o primeiro é o `markdown`)
 
 Exemplos prontos em `exemplos/` (`exemplos/site/` é um site simples; `exemplos/blog/` tem login, banco e upload).
 
