@@ -107,6 +107,11 @@ chegar por qualquer página descobrir o resto. O manifesto é gerado do `rotas.d
   `/.well-known/ai-manifest.json`, ou peça esta mesma URL com `Accept: application/json`". O humano não vê
   nada. Fragmentos de HTML, páginas que já têm um `ai-manifest` e a face de agente ficam como estão, e um
   site sem face de agente não anuncia nada.
+- **`/llms.txt`.** O djo também gera `GET /llms.txt`, em Markdown, que é o primeiro arquivo que muitos agentes
+  procuram: o nome e o `about` do site (de `Route.site`), uma frase explicando as duas faces, o link do
+  manifesto e a lista das leituras e ações com a descrição de cada uma. Ele sai do mesmo `rotas.djo` e só
+  existe em site com alguma face de agente (senão dá `404`). Para escrever o seu, declare a rota:
+  `Route.get:"/llms.txt":"paginas/llms.djo"` (a sua vence). Só vale no modo `rotas.djo`.
 - `rel="ai-manifest"` e o caminho `/.well-known/ai-manifest.json` são uma convenção da djo, não um padrão
   registrado.
 

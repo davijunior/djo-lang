@@ -179,7 +179,60 @@ func (t *routeTable) buildManifest(in *Interp) {
 	}
 	t.manifest, _ = json.MarshalIndent(m, "", "  ")
 	t.home = buildHome(t.site, routes, actions)
+	t.llms = buildLLMS(t.site, routes, actions)
 }
+
+// buildLLMS monta o /llms.txt: o mesmo resumo da home, em Markdown, no formato que os agentes
+// procuram primeiro (título, citação com o resumo, listas de links). O detalhe fica no manifesto.
+func buildLLMS(site map[string]any, routes, actions []any) []byte {
+	var b strings.Builder
+	nome, _ := site["nome"].(string)
+	if nome == "" {
+		nome = "Site"
+	}
+	fmt.Fprintf(&b, "# %s\n\n", oneLine(nome))
+	if about, _ := site["about"].(string); about != "" {
+		fmt.Fprintf(&b, "> %s\n\n", oneLine(about))
+	}
+	fmt.Fprintf(&b, "Este site tem duas faces. As páginas em HTML são para humanos. Para agentes, peça a mesma URL com `Accept: application/json`, ou leia o manifesto, que descreve cada rota, ação e tipo.\n\n")
+	fmt.Fprintf(&b, "## Comece por aqui\n\n- [Manifesto](%s): rotas, ações e tipos (JSON Schema)\n", manifestPath)
+	line := func(path, desc string) {
+		if desc != "" {
+			fmt.Fprintf(&b, "- [%s](%s): %s\n", path, path, oneLine(desc))
+		} else {
+			fmt.Fprintf(&b, "- [%s](%s)\n", path, path)
+		}
+	}
+	if len(routes) > 0 {
+		b.WriteString("\n## Leituras (GET com Accept: application/json)\n\n")
+		for _, it := range routes {
+			m := it.(map[string]any)
+			p, _ := m["path"].(string)
+			d, _ := m["description"].(string)
+			line(p, d)
+		}
+	}
+	if len(actions) > 0 {
+		b.WriteString("\n## Ações (corpo application/json)\n\n")
+		for _, it := range actions {
+			m := it.(map[string]any)
+			p, _ := m["path"].(string)
+			meth, _ := m["method"].(string)
+			name, _ := m["name"].(string)
+			d, _ := m["description"].(string)
+			if d != "" {
+				d = name + ": " + d
+			} else {
+				d = name
+			}
+			line(p, meth+" "+d)
+		}
+	}
+	return []byte(b.String())
+}
+
+// oneLine deixa o texto numa linha só, para não quebrar a lista do Markdown.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // buildHome monta o que um agente recebe em "/": saudação e um resumo do que o site oferece.
 // O detalhe (tipos, schemas) fica no manifesto; aqui só o que ajuda a escolher o próximo passo.

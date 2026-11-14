@@ -47,6 +47,7 @@ type routeTable struct {
 	list     []*route
 	manifest []byte         // JSON do manifesto; vazio se nenhuma rota fala com agentes
 	site     map[string]any // Route.site: nome e about do site
+	llms     []byte         // conteúdo gerado do /llms.txt; vazio = não há
 	home     []byte         // resposta padrão de agente para "/" (saudação + resumo); vazio = não há
 }
 
@@ -430,7 +431,16 @@ func (s *Server) table() (*routeTable, error) {
 	return t, nil
 }
 
-// face escolhe entre a tela e a resposta de agente pelo cabeçalho Accept.
+// declares diz se o rotas.djo declara alguma rota com esse caminho (qualquer método).
+func (t *routeTable) declares(p string) bool {
+	for _, r := range t.list {
+		if r.raw == p {
+			return true
+		}
+	}
+	return false
+}
+
 // rootAgent diz se o rotas.djo já declara uma face de agente para GET /.
 func (t *routeTable) rootAgent() bool {
 	for _, r := range t.list {
@@ -466,6 +476,16 @@ func (s *Server) serveRoutes(w http.ResponseWriter, r *http.Request, t *routeTab
 		get := r.Method == http.MethodGet || r.Method == http.MethodHead
 		if urlPath == manifestPath && get {
 			s.serveManifest(w, r, t)
+			return
+		}
+		if urlPath == "/llms.txt" && get && len(t.llms) > 0 && !t.declares("/llms.txt") {
+			h := w.Header()
+			h.Set("Content-Type", "text/markdown; charset=utf-8")
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("Cache-Control", "public, max-age=60")
+			if r.Method != http.MethodHead {
+				w.Write(t.llms)
+			}
 			return
 		}
 		// "/" para um agente, quando o site não escreveu a sua própria face de agente

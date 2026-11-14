@@ -237,3 +237,55 @@ func TestSemAgentesSemAviso(t *testing.T) {
 		t.Errorf("site sem face de agente não deve anunciar nada: %s", b)
 	}
 }
+
+func TestLLMSTxt(t *testing.T) {
+	ts := site(t, map[string]string{
+		"rotas.djo": `Route.site:{"nome": "Loja", "about": "Vende\ncoisas"}
+Route.get:"/":"paginas/inicio.djo.html"
+Route.get:"/produtos":{"agent": "agentes/p.djo", "about": "Lista os produtos"}
+`,
+		"paginas/inicio.djo.html": "<p>oi</p>",
+		"agentes/p.djo":           `print Json.encode:[1]`,
+	})
+	resp, err := http.Get(ts.URL + "/llms.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	body := string(b)
+	if resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/markdown") {
+		t.Fatalf("llms.txt: %d %v", resp.StatusCode, resp.Header)
+	}
+	for _, want := range []string{"# Loja\n", "> Vende coisas\n", "(/.well-known/ai-manifest.json)", "- [/produtos](/produtos): Lista os produtos", "Accept: application/json"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("falta %q em:\n%s", want, body)
+		}
+	}
+
+	// o site pode declarar o seu próprio /llms.txt
+	ts2 := site(t, map[string]string{
+		"rotas.djo": `Route.get:"/llms.txt":"paginas/llms.djo"
+Route.get:"/dados":{"agent": "agentes/p.djo"}
+`,
+		"paginas/llms.djo": `print "meu texto"`,
+		"agentes/p.djo":    `print Json.encode:[1]`,
+	})
+	r2, _ := http.Get(ts2.URL + "/llms.txt")
+	b2, _ := io.ReadAll(r2.Body)
+	r2.Body.Close()
+	if strings.TrimSpace(string(b2)) != "meu texto" {
+		t.Errorf("o llms.txt do site deve vencer: %q", b2)
+	}
+
+	// sem face de agente, não existe
+	ts3 := site(t, map[string]string{
+		"rotas.djo":               `Route.get:"/":"paginas/inicio.djo.html"`,
+		"paginas/inicio.djo.html": "<p>oi</p>",
+	})
+	r3, _ := http.Get(ts3.URL + "/llms.txt")
+	r3.Body.Close()
+	if r3.StatusCode != 404 {
+		t.Errorf("site sem agentes: llms.txt deveria ser 404, veio %d", r3.StatusCode)
+	}
+}
