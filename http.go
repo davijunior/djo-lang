@@ -45,6 +45,7 @@ func init() {
 		"form":      viaBuiltin("form"),
 		"header":    viaBuiltin("header"),
 		"setheader": viaBuiltin("setheader"),
+		"bearer":    viaBuiltin("bearer"),
 		"status":    viaBuiltin("status"),
 		"redirect":  viaBuiltin("redirect"),
 		"cookie":    viaBuiltin("cookie"),

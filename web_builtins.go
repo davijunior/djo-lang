@@ -5,6 +5,7 @@ package main
 import (
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 const hasWeb = true
@@ -68,6 +69,17 @@ func init() {
 			in.needWeb(line, "header")
 			if v := in.req.Header.Values(argStr(a, 0, line, "header")); len(v) > 0 {
 				return v[0]
+			}
+			return nil
+		}},
+		// Http.bearer: o token de "Authorization: Bearer <token>", ou nil
+		"bearer": {0, func(in *Interp, env *Env, line int, a []any) any {
+			in.needWeb(line, "bearer")
+			v := in.req.Header.Get("Authorization")
+			if len(v) > 7 && strings.EqualFold(v[:7], "Bearer ") {
+				if tok := strings.TrimSpace(v[7:]); tok != "" {
+					return tok
+				}
 			}
 			return nil
 		}},

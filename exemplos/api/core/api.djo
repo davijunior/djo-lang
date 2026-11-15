@@ -1,0 +1,77 @@
+// A regra de negócio mora aqui. As rotas (rotas.djo) só dizem qual método e caminho chamam o quê.
+
+struct Tarefa
+    id[Int]
+    titulo[String]
+    feita[Bool]
+
+f abrir
+    Db.open:"api.db"
+    Db.exec:"CREATE TABLE IF NOT EXISTS tarefas (id INTEGER PRIMARY KEY, titulo TEXT NOT NULL, feita INTEGER NOT NULL DEFAULT 0)"
+    Db.exec:"CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY)"
+
+// O banco só guarda o hash do token. Quem lê o banco não consegue usar a API.
+f autorizado
+    var token = Http.bearer:
+    if{ cond[token == nil] return false }
+    abrir:
+    return Db.one:"SELECT 1 AS ok FROM tokens WHERE hash = ?":[Hash.sha256:token] != nil
+
+f recusar
+    Http.status:401
+    Http.setheader:"WWW-Authenticate":"Bearer"
+    return {"erro": "envie o cabeçalho Authorization: Bearer SEU_TOKEN"}
+
+f como_tarefa
+    params[linha[Map]]
+    return {"id": linha["id"], "titulo": linha["titulo"], "feita": linha["feita"] == 1}
+
+f buscar
+    params[id[Int]]
+    var linha = Db.one:"SELECT * FROM tarefas WHERE id = ?":[id]
+    if{ cond[linha == nil] return nil }
+    return como_tarefa:linha
+
+f nao_achada
+    Http.status:404
+    return {"erro": "tarefa não encontrada"}
+
+action criar_tarefa
+    "Cria uma tarefa"
+    params[titulo[String]]
+    if{ cond[not (autorizado:)] return recusar: }
+    if{ cond[len:titulo == 0]
+        Http.status:400
+        return {"erro": "titulo vazio"}
+    }
+    var r = Db.exec:"INSERT INTO tarefas (titulo) VALUES (?)":[titulo]
+    Http.status:201
+    return buscar:r["last_id"]
+
+action trocar_tarefa
+    "Troca o título e o estado de uma tarefa"
+    params[id[Int], titulo[String], feita[Bool]]
+    if{ cond[not (autorizado:)] return recusar: }
+    if{ cond[buscar:id == nil] return nao_achada: }
+    var n = 0
+    if{ cond[feita] n = 1 }
+    Db.exec:"UPDATE tarefas SET titulo = ?, feita = ? WHERE id = ?":[titulo, n, id]
+    return buscar:id
+
+action marcar_feita
+    "Marca uma tarefa como feita (ou volta atrás)"
+    params[id[Int], feita[Bool]]
+    if{ cond[not (autorizado:)] return recusar: }
+    if{ cond[buscar:id == nil] return nao_achada: }
+    var n = 0
+    if{ cond[feita] n = 1 }
+    Db.exec:"UPDATE tarefas SET feita = ? WHERE id = ?":[n, id]
+    return buscar:id
+
+action apagar_tarefa
+    "Apaga uma tarefa"
+    params[id[Int]]
+    if{ cond[not (autorizado:)] return recusar: }
+    if{ cond[buscar:id == nil] return nao_achada: }
+    Db.exec:"DELETE FROM tarefas WHERE id = ?":[id]
+    return {"apagada": id}

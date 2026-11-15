@@ -85,6 +85,7 @@ Route.static:"/assets":"publico"
 | `Route.site:{"nome": "x", "about": "y"}` | quem é o site: vai na saudação de agentes em `/` e no manifesto (veja [Agentes](10-agentes.md)) |
 | `Route.action:"/posts":"criar_post"` | publica uma `action` para agentes, veja [Agentes](10-agentes.md) |
 | `Route.put_action:` `patch_action:` `delete_action:` | a mesma `action`, publicada com `PUT`, `PATCH` ou `DELETE` (uma API no estilo REST) |
+| `Route.cors:{"origins": ["https://app.com"]}` | deixa um front-end de outro endereço chamar o site; só as origens listadas (veja [Fazendo uma API](13-api.md)) |
 
 - O caminho aceita `{nome}` (um trecho) e `{...nome}` (o resto, só no fim). Os valores chegam por
   `param:"nome"`, `Http.param:"nome"` e `Http.args:`, como nas rotas por arquivo.
@@ -157,6 +158,7 @@ Disponível só nas páginas servidas por `djo serve`.
 | `Http.query:"chave"`     | parâmetro da URL, ou `nil` |
 | `Http.form:"campo"`      | campo de formulário (POST), ou `nil` |
 | `Http.header:"Nome"`     | cabeçalho da requisição, ou `nil` |
+| `Http.bearer:`           | o token de `Authorization: Bearer <token>`, ou `nil` (veja [Fazendo uma API](13-api.md)) |
 | `Http.body:`             | corpo cru da requisição |
 | `Http.json:`             | corpo lido como JSON (`nil` se inválido) |
 | `Http.file:"campo"`      | arquivo enviado: mapa `{name, size, type}`, ou `nil` |

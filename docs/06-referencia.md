@@ -78,7 +78,7 @@ var url = "/posts/" + (slug:titulo)
 
 ## Http
 
-`action` (função que vira endpoint para agentes, veja [Agentes](10-agentes.md)). Rotas (`rotas.djo`: `Route.get:`, `Route.post:`, `Route.static:`, `Route.site:`...), entrada (`Http.query:`, `Http.param:`, `Http.args:`, `Http.form:`...), resposta (`Http.json:`, `Http.redirect:`...) e saída (`Http.get:`, `Http.post:`, `Http.put:`, `Http.delete:`). Veja [Web](04-web.md).
+`action` (função que vira endpoint para agentes, veja [Agentes](10-agentes.md)). Rotas (`rotas.djo`: `Route.get:`, `Route.post:`, `Route.static:`, `Route.site:`...), entrada (`Http.query:`, `Http.param:`, `Http.args:`, `Http.form:`, `Http.bearer:`...), resposta (`Http.json:`, `Http.redirect:`...) e saída (`Http.get:`, `Http.post:`, `Http.put:`, `Http.delete:`). Veja [Web](04-web.md).
 
 ## File
 

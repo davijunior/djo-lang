@@ -1,0 +1,11 @@
+// Devolve as Tarefa inteiras: o ?campos= recorta, e o ?tabela devolve CSV.
+if{ cond[not (autorizado:)]
+    Http.json:(recusar:):401
+    return
+}
+abrir:
+var lista = []
+for{ each[linha in Db.query:"SELECT * FROM tarefas ORDER BY id"]
+    push:lista:(como_tarefa:linha)
+}
+Http.json:lista

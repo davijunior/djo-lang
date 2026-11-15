@@ -24,7 +24,7 @@ func serveCmd(args []string) int {
 
 func init() {
 	names := map[string][]string{
-		"Http":    {"method", "path", "query", "param", "args", "form", "header", "setheader", "status", "redirect", "cookie", "setcookie", "body", "json", "file", "upload", "ip"},
+		"Http":    {"method", "path", "query", "param", "args", "form", "header", "bearer", "setheader", "status", "redirect", "cookie", "setcookie", "body", "json", "file", "upload", "ip"},
 		"Route":   {"get", "post", "put", "patch", "delete", "static", "site"},
 		"Session": {"get", "set", "del", "clear", "destroy", "renew", "token", "verify"},
 	}

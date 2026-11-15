@@ -1,0 +1,10 @@
+// Gera um token de acesso e guarda só o hash dele. Rode na pasta da API:
+//
+//     djo criar_token.djo
+//
+// O token aparece uma vez só. Quem o tiver chama a API com  Authorization: Bearer SEU_TOKEN.
+Db.open:"api.db"
+Db.exec:"CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY)"
+var token = Hash.random:24
+Db.exec:"INSERT INTO tokens (hash) VALUES (?)":[Hash.sha256:token]
+print "token: " + token

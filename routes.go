@@ -47,6 +47,7 @@ type routeTable struct {
 	list     []*route
 	manifest []byte         // JSON do manifesto; vazio se nenhuma rota fala com agentes
 	site     map[string]any // Route.site: nome e about do site
+	cors     *corsCfg       // Route.cors; nil = sem CORS
 	llms     []byte         // conteúdo gerado do /llms.txt; vazio = não há
 	home     []byte         // resposta padrão de agente para "/" (saudação + resumo); vazio = não há
 }
@@ -74,6 +75,10 @@ func init() {
 			return nil
 		}}
 	}
+	ns["cors"] = builtin{1, func(in *Interp, env *Env, line int, a []any) any {
+		in.addCors(line, a)
+		return nil
+	}}
 	ns["site"] = builtin{1, func(in *Interp, env *Env, line int, a []any) any {
 		in.addSite(line, a)
 		return nil
@@ -392,7 +397,7 @@ func loadRoutes(root string) (*routeTable, error) {
 			ok = isID && id.Name == "Route"
 		}
 		if !ok {
-			return nil, fail(lineOf(s), "só aceita chamadas Route.get:, Route.post:... e Route.static:")
+			return nil, fail(lineOf(s), "só aceita chamadas Route.get:, Route.post:... Route.action:, Route.cors:, Route.site: e Route.static:")
 		}
 	}
 	in := NewInterp(io.Discard)
@@ -478,6 +483,14 @@ func (s *Server) serveRoutes(w http.ResponseWriter, r *http.Request, t *routeTab
 	var parts []string
 	if urlPath != "/" {
 		parts = strings.Split(strings.Trim(urlPath, "/"), "/")
+	}
+	if t.cors != nil {
+		if s.corsPreflight(w, r, t, parts) {
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" {
+			w = &corsWriter{ResponseWriter: w, cfg: t.cors, origin: origin}
+		}
 	}
 	if len(t.manifest) > 0 {
 		w.Header().Set("Link", "<"+manifestPath+">; rel=\"ai-manifest\"")

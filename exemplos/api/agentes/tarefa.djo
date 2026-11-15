@@ -1,0 +1,11 @@
+if{ cond[not (autorizado:)]
+    Http.json:(recusar:):401
+    return
+}
+abrir:
+var t = buscar:(int:(param:"id"))
+if{ cond[t == nil]
+    Http.json:(nao_achada:):404
+    return
+}
+Http.json:t
