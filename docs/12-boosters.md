@@ -81,7 +81,7 @@ Uma variável com o mesmo nome do booster esconde o booster naquele trecho, como
 
 ## Permissões
 
-`Json`, `Time`, `Hash` e as funções de texto, lista e mapa estão sempre liberadas. Os namespaces que mexem no mundo (`Http`, `File`, `Db`, `Session`, `Serial` e `Route`) só funcionam se o booster pedir no `booster.json`. O `djo booster add` avisa quais ele pediu antes de instalar. O `markdown` não pede nenhuma.
+`Json`, `Time`, `Hash` e as funções de texto, lista e mapa estão sempre liberadas. Os namespaces que mexem no mundo (`Http`, `File`, `Db`, `Session`, `Serial`, `Route` e `Env`) só funcionam se o booster pedir no `booster.json`. O `djo booster add` avisa quais ele pediu antes de instalar. O `markdown` não pede nenhuma.
 
 ## O main.djo e o core do booster
 

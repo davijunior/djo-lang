@@ -38,6 +38,7 @@ type route struct {
 	about   string   // descrição para o manifesto
 	action  string   // nome da action (Route.action)
 	returns *retSpec // tipo da resposta de agente
+	page    bool     // a rota pagina: o manifesto anuncia ?pagina= e ?limite=
 	cache   int      // segundos que a resposta de um GET fica em memória (0 = não guarda)
 	static  string   // pasta de arquivos estáticos (Route.static)
 	line    int
@@ -191,6 +192,15 @@ func (in *Interp) addRoute(line int, method string, a []any) {
 					fail(line, "Route %s: \"cache\" só vale em Route.get", pat)
 				}
 				r.cache = int(n)
+			case "page":
+				b, ok := target.Vals[i].(bool)
+				if !ok {
+					fail(line, "Route %s: \"page\" deve ser true ou false", pat)
+				}
+				if method != "GET" {
+					fail(line, "Route %s: \"page\" só vale em Route.get", pat)
+				}
+				r.page = b
 			case "about":
 				about, ok := target.Vals[i].(string)
 				if !ok {

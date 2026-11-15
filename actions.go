@@ -154,12 +154,20 @@ func (t *routeTable) buildManifest(in *Interp) {
 		if len(params) > 0 {
 			e["path_params"] = params
 		}
+		var q []any
 		if r.returns != nil {
 			e["returns"] = r.returns.schema()
-			q := []any{map[string]any{"name": "campos", "type": "string", "description": "campos desejados, separados por vírgula (ex.: id,titulo); aninhados com ponto"}}
+			q = append(q, map[string]any{"name": "campos", "type": "string", "description": "campos desejados, separados por vírgula (ex.: id,titulo); aninhados com ponto"})
 			if r.returns.list {
 				q = append(q, map[string]any{"name": "tabela", "type": "flag", "description": "devolve a lista como CSV (text/csv): cabeçalho uma vez, uma linha por item; poupa tokens"})
 			}
+		}
+		if r.page {
+			q = append(q,
+				map[string]any{"name": "pagina", "type": "integer", "description": "número da página, a partir de 1; há mais páginas quando a resposta traz Link rel=\"next\""},
+				map[string]any{"name": "limite", "type": "integer", "description": "itens por página (o servidor limita o máximo)"})
+		}
+		if len(q) > 0 {
 			e["query"] = q
 		}
 		routes = append(routes, e)

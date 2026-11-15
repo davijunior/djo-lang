@@ -106,6 +106,44 @@ Db.commit:
 
 Se a página terminar (ou der erro) sem `commit`, a transação é desfeita sozinha.
 
+## Paginação: `Db.page:`
+
+Para listas grandes, não traga tudo: `Db.page:` devolve uma página e diz se há mais.
+
+```
+var r = Db.page:"SELECT id, titulo FROM posts WHERE autor = ? ORDER BY id DESC":[autor]
+r["itens"]      // a lista de linhas desta página
+r["pagina"]     // 1, 2, 3...
+r["limite"]     // itens por página
+r["proxima"]    // o número da próxima página, ou nil se esta é a última
+r["anterior"]   // o número da página anterior, ou nil na primeira
+```
+
+Numa página do servidor, a página e o tamanho vêm da URL: `?pagina=2&limite=20`. O padrão é 20 por página e
+o máximo é 100. Valor ausente, que não seja número ou fora da faixa **não dá erro**: volta para um valor
+seguro (um `?limite=100000` vira 100). Uma página além do fim devolve a lista vazia.
+
+Opções, no terceiro argumento: `Db.page:sql:[params]:{"limite": 10, "max": 50, "total": true}`.
+
+| Opção       | O que faz |
+|-------------|-----------|
+| `"limite"`  | o tamanho padrão da página (de 1 a 1000) |
+| `"max"`     | o maior tamanho que o cliente pode pedir (padrão 100; de 1 a 1000) |
+| `"total"`   | `true` conta as linhas e acrescenta `r["total"]` e `r["paginas"]`; padrão `false` |
+| `"pagina"`  | fixa a página (para scripts, sem URL) |
+
+- O SQL **precisa** ter `ORDER BY`: sem uma ordem fixa, a mesma linha pode aparecer em duas páginas.
+- **Não escreva** `LIMIT` nem `OFFSET`: o `Db.page:` os acrescenta (com números já validados). Só vale `SELECT` (ou `WITH`).
+- Por padrão ele **não conta** a tabela. Busca uma linha a mais só para saber se existe a próxima página. Contar
+  é caro em tabela grande e, a cada página, repete o trabalho; peça `"total": true` só quando a tela precisa
+  mostrar "página 3 de 12".
+- Página muito funda (`?pagina=50000`) fica lenta em qualquer banco, porque ele precisa pular as linhas
+  anteriores. O número da página vai até 1.000.000. Para listas enormes, pagine pela chave:
+  `WHERE id < ? ORDER BY id DESC` com o último `id` da página anterior, usando `Page.read:` para o tamanho.
+
+Para uma API, `Page.headers:r` põe na resposta o `Link: <...>; rel="next"` / `rel="prev"` e o `X-Total-Count`
+(se pediu o total), e o corpo continua sendo só a lista. Veja [Fazendo uma API](13-api.md).
+
 ## Exemplo com structs
 
 ```

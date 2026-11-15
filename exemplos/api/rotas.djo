@@ -5,7 +5,7 @@ Route.site:{"nome": "API de tarefas", "about": "Cria, lista, troca, marca e apag
 // Um front-end em outro endereço só consegue chamar a API se a origem dele estiver aqui.
 Route.cors:{"origins": ["http://localhost:5173"], "headers": ["Content-Type", "Authorization"]}
 
-Route.get:"/tarefas":{"agent": "agentes/tarefas.djo", "about": "Lista as tarefas", "returns": ["Tarefa"]}
+Route.get:"/tarefas":{"agent": "agentes/tarefas.djo", "about": "Lista as tarefas, paginado", "returns": ["Tarefa"], "page": true}
 Route.get:"/tarefas/{id}":{"agent": "agentes/tarefa.djo", "returns": "Tarefa"}
 
 Route.action:"/tarefas":"criar_tarefa":"Tarefa"

@@ -136,3 +136,11 @@ func init() {
 		builtins[k] = v
 	}
 }
+
+// reqQuery devolve um parâmetro ?nome= da requisição atual ("" fora do servidor ou se não veio).
+func (in *Interp) reqQuery(name string) string {
+	if in.req == nil {
+		return ""
+	}
+	return in.req.URL.Query().Get(name)
+}

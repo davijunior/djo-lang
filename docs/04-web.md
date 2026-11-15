@@ -90,7 +90,7 @@ Route.static:"/assets":"publico"
 - O caminho aceita `{nome}` (um trecho) e `{...nome}` (o resto, só no fim). Os valores chegam por
   `param:"nome"`, `Http.param:"nome"` e `Http.args:`, como nas rotas por arquivo.
 - O destino é uma `String` (a página, valendo para o navegador) ou um Map com `"html"`, `"agent"`, `"about"`
-  (descrição para o manifesto), `"returns"` (tipo da resposta de agente) e `"cache"` (segundos, só em `Route.get`; veja [Agentes](10-agentes.md)).
+  (descrição para o manifesto), `"returns"` (tipo da resposta de agente) e `"cache"` (segundos, só em `Route.get`; veja [Agentes](10-agentes.md)) e `"page": true` (a rota usa `Db.page:`: o manifesto anuncia `?pagina=` e `?limite=`).
   Chave desconhecida (`"agente"`) é erro.
 - **Tela e agente são páginas separadas na mesma URL.** A escolha é pelo cabeçalho `Accept`:
   `application/json` sem `text/html` vai para `"agent"`, o resto vai para `"html"`. A resposta leva

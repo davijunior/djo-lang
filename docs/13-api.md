@@ -33,6 +33,29 @@ Uma rota só de agente (sem `"html"`) responde `406` a quem pedir uma tela. Quem
 As leituras e as escritas moram no mesmo caminho: `GET /tarefas/3` e `DELETE /tarefas/3` são rotas diferentes.
 Um método que o caminho não tem responde `405` com o `Allow` certo.
 
+## Paginação
+
+Uma leitura que devolve muitas linhas usa `Db.page:`. O corpo continua sendo só a lista, e a paginação vai
+nos cabeçalhos:
+
+```
+Route.get:"/tarefas":{"agent": "agentes/tarefas.djo", "returns": ["Tarefa"], "page": true}
+```
+```
+var r = Db.page:"SELECT * FROM tarefas ORDER BY id":[]:{"total": true}
+Page.headers:r
+Http.json:r["itens"]
+```
+```
+$ curl -i 'localhost:8080/tarefas?limite=2&pagina=2' ...
+Link: </tarefas?limite=2&pagina=3>; rel="next", </tarefas?limite=2&pagina=1>; rel="prev"
+X-Total-Count: 5
+```
+
+`"page": true` faz o manifesto anunciar `?pagina=` e `?limite=` para os agentes. Pedidos ruins (página
+negativa, limite enorme) não dão erro: viram valores seguros. Veja [Banco de dados](05-banco.md) para o que
+`Db.page:` faz e o que evita (contar a tabela a cada página).
+
 ## Autenticação por token
 
 `Http.bearer:` devolve o token de `Authorization: Bearer <token>`, ou `nil` (sem o cabeçalho, com outro tipo
@@ -60,6 +83,7 @@ if{ cond[not (autorizado:)]
 Para gerar um token (o exemplo tem o `criar_token.djo`): `Hash.random:24` cria 48 caracteres hex, e o banco
 guarda `Hash.sha256:token`. O token só aparece uma vez, na hora de criar.
 
+- Uma chave de outro serviço (que a API chama) não vai no código: leia com `Env.get:"CHAVE"`.
 - Mande o token só por HTTPS. Em HTTP puro, qualquer um no caminho o lê.
 - Um token que vaza vale até você apagar a linha dele da tabela. Se precisar de validade, guarde uma data
   junto e confira no `autorizado`.
@@ -107,6 +131,6 @@ djo agent -method DELETE localhost:8080/tarefas/1
 
 ## O que fica de fora
 
-- **Paginação, ordenação e filtros** são com você (`?pagina=2` chega por `Http.query:`).
+- **Ordenação e filtros** são com você (`?ordem=nome` chega por `Http.query:`; valide os valores antes de usar no SQL).
 - **Limite de requisições por chamador** existe só para a face de agente (`-agent-rate`).
 - **Versão da API** (`/v1/...`) é só um prefixo nas rotas.

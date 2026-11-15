@@ -4,8 +4,11 @@ if{ cond[not (autorizado:)]
     return
 }
 abrir:
+// ?pagina= e ?limite= (20 por página, no máximo 100). O Link rel="next" e o X-Total-Count dizem o resto.
+var pagina = Db.page:"SELECT * FROM tarefas ORDER BY id":[]:{"total": true}
+Page.headers:pagina
 var lista = []
-for{ each[linha in Db.query:"SELECT * FROM tarefas ORDER BY id"]
+for{ each[linha in pagina["itens"]]
     push:lista:(como_tarefa:linha)
 }
 Http.json:lista

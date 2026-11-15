@@ -128,7 +128,27 @@ Porta serial para sensores e placas. Veja [Hardware](08-iot.md).
 
 ## Db
 
-Veja [Banco de dados](05-banco.md).
+Veja [Banco de dados](05-banco.md). `Db.page:` pagina uma consulta.
+
+## Page
+
+| Função | O que faz |
+|--------|-----------|
+| `Page.read:` | lê `?pagina=` e `?limite=` e devolve `{"pagina", "limite", "deslocamento"}`; 20 por página, no máximo 100 |
+| `Page.read:10:50` | o mesmo, com o tamanho padrão e o máximo que você escolher (até 1000) |
+| `Page.headers:r` | põe `Link` (`next`/`prev`) e `X-Total-Count` na resposta, a partir do resultado de `Db.page:` |
+
+## Env
+
+| Função | O que faz |
+|--------|-----------|
+| `Env.get:"NOME"` | o valor da variável de ambiente, ou `nil` se ela não existe |
+| `Env.get:"NOME":"padrão"` | o mesmo, com um valor para quando ela não existe |
+
+Uma variável que existe e está vazia devolve `""`, e não o padrão. É o lugar dos segredos (senhas, chaves de
+serviços): ficam fora do código e do executável (`djo build` não leva o ambiente). Qualquer página e qualquer
+`f` do projeto pode ler todas as variáveis do processo, então **nunca imprima** o resultado em uma página. Um
+booster só usa `Env` se pedir a permissão no `booster.json`.
 
 ## Time
 

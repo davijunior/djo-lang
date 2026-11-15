@@ -16,7 +16,7 @@ func init() {
 		return nil
 	}}
 	natives["Db"] = map[string]builtin{}
-	for _, n := range []string{"open", "exec", "query", "one", "begin", "commit", "rollback"} {
+	for _, n := range []string{"open", "exec", "query", "one", "page", "begin", "commit", "rollback"} {
 		natives["Db"][n] = off
 	}
 }

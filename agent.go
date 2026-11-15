@@ -174,6 +174,8 @@ func showManifest(c *http.Client, u *url.URL, raw bool, out, errw io.Writer) int
 					fmt.Fprintln(out, "         aceita ?campos=a,b (devolve só esses campos)")
 				case "tabela":
 					fmt.Fprintln(out, "         aceita ?tabela (lista como CSV, bem menor)")
+				case "pagina":
+					fmt.Fprintln(out, "         paginada: ?pagina=N&limite=N (o cabeçalho Link traz a próxima página)")
 				}
 			}
 		}

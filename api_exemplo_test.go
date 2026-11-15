@@ -96,6 +96,14 @@ func TestExemploAPI(t *testing.T) {
 	if c, b, _ := do("GET", "/tarefas", "", tk); c != 200 || !strings.HasPrefix(b, `[{"id":1,`) || !strings.Contains(b, `"titulo":"Segunda"`) {
 		t.Errorf("lista = %d %s", c, b)
 	}
+	// paginação: uma por vez, com o Link da próxima e o total nos cabeçalhos
+	c, b, h := do("GET", "/tarefas?limite=1", "", tk)
+	if c != 200 || strings.Count(b, `"id"`) != 1 || h.Get("X-Total-Count") != "2" || !strings.Contains(strings.Join(h.Values("Link"), ","), `rel="next"`) {
+		t.Errorf("página 1 = %d %s total=%q link=%v", c, b, h.Get("X-Total-Count"), h.Values("Link"))
+	}
+	if c, b, h := do("GET", "/tarefas?limite=1&pagina=2", "", tk); c != 200 || !strings.Contains(b, `"Segunda"`) || strings.Contains(strings.Join(h.Values("Link"), ","), `rel="next"`) {
+		t.Errorf("página 2 = %d %s %v", c, b, h.Values("Link"))
+	}
 	if c, b, _ := do("GET", "/tarefas/2?campos=titulo", "", tk); c != 200 || b != `{"titulo":"Segunda"}` {
 		t.Errorf("?campos = %d %s", c, b)
 	}

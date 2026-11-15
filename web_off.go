@@ -17,6 +17,8 @@ func (in *Interp) needWeb(line int, name string) {
 	fail(line, "'%s' não está incluído neste build (compilado com -tags noweb)", name)
 }
 
+func (in *Interp) reqQuery(name string) string { return "" }
+
 func serveCmd(args []string) int {
 	fmt.Fprintln(os.Stderr, "djo serve não está incluído neste build (compilado com -tags noweb)")
 	return 1
@@ -26,6 +28,7 @@ func init() {
 	names := map[string][]string{
 		"Http":    {"method", "path", "query", "param", "args", "form", "header", "bearer", "setheader", "status", "redirect", "cookie", "setcookie", "body", "json", "file", "upload", "ip"},
 		"Route":   {"get", "post", "put", "patch", "delete", "static", "site"},
+		"Page":    {"headers"},
 		"Session": {"get", "set", "del", "clear", "destroy", "renew", "token", "verify"},
 	}
 	for ns, list := range names {

@@ -259,6 +259,10 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 
 	h := w.Header()
 	for k, v := range in.resp.header {
+		if k == "Link" {
+			h["Link"] = append(h["Link"], v...) // soma ao Link do manifesto, em vez de trocar
+			continue
+		}
 		h[k] = v
 	}
 	if h.Get("Content-Type") == "" {

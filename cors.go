@@ -153,8 +153,10 @@ func (c *corsWriter) apply() {
 	h.Add("Vary", "Origin")
 	h.Del("Access-Control-Allow-Origin")
 	h.Del("Access-Control-Allow-Credentials")
+	h.Del("Access-Control-Expose-Headers")
 	if v := c.cfg.allowed(c.origin); v != "" {
 		h.Set("Access-Control-Allow-Origin", v)
+		h.Set("Access-Control-Expose-Headers", "Link, X-Total-Count") // para o front-end ler a paginação
 		if c.cfg.credentials && v != "*" {
 			h.Set("Access-Control-Allow-Credentials", "true")
 		}
