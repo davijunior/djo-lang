@@ -84,6 +84,7 @@ Route.static:"/assets":"publico"
 | `Route.static:"/assets":"publico"` | serve arquivos de uma pasta (só `GET`) |
 | `Route.site:{"nome": "x", "about": "y"}` | quem é o site: vai na saudação de agentes em `/` e no manifesto (veja [Agentes](10-agentes.md)) |
 | `Route.action:"/posts":"criar_post"` | publica uma `action` para agentes, veja [Agentes](10-agentes.md) |
+| `Route.put_action:` `patch_action:` `delete_action:` | a mesma `action`, publicada com `PUT`, `PATCH` ou `DELETE` (uma API no estilo REST) |
 
 - O caminho aceita `{nome}` (um trecho) e `{...nome}` (o resto, só no fim). Os valores chegam por
   `param:"nome"`, `Http.param:"nome"` e `Http.args:`, como nas rotas por arquivo.

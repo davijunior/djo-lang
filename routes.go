@@ -63,9 +63,17 @@ func init() {
 		}}
 	}
 	ns["action"] = builtin{-1, func(in *Interp, env *Env, line int, a []any) any {
-		in.addAction(line, a)
+		in.addAction(line, "POST", "action", a)
 		return nil
 	}}
+	// put_action, patch_action e delete_action: a mesma action, publicada com outro método HTTP
+	for _, m := range []string{"put", "patch", "delete"} {
+		method, name := strings.ToUpper(m), m+"_action"
+		ns[name] = builtin{-1, func(in *Interp, env *Env, line int, a []any) any {
+			in.addAction(line, method, name, a)
+			return nil
+		}}
+	}
 	ns["site"] = builtin{1, func(in *Interp, env *Env, line int, a []any) any {
 		in.addSite(line, a)
 		return nil
@@ -197,29 +205,29 @@ func (in *Interp) addRoute(line int, method string, a []any) {
 	t.add(line, r)
 }
 
-func (in *Interp) addAction(line int, a []any) {
+func (in *Interp) addAction(line int, method, fn string, a []any) {
 	t := in.needRoutes(line)
 	if len(a) < 2 || len(a) > 3 {
-		fail(line, "Route.action espera (caminho, nome da action) e, se quiser, o tipo da resposta")
+		fail(line, "Route.%s espera (caminho, nome da action) e, se quiser, o tipo da resposta", fn)
 	}
 	pat, ok1 := a[0].(string)
 	name, ok2 := a[1].(string)
 	if !ok1 || !ok2 {
-		fail(line, "Route.action espera (caminho, nome da action), os dois String")
+		fail(line, "Route.%s espera (caminho, nome da action), os dois String", fn)
 	}
 	var ret *retSpec
 	if len(a) == 3 {
-		ret = in.parseReturns(line, "Route.action "+pat, a[2])
+		ret = in.parseReturns(line, "Route."+fn+" "+pat, a[2])
 	}
 	fd := in.funcs[name]
 	if fd == nil || !fd.Action {
-		fail(line, "Route.action: '%s' não é uma action (declare com \"action %s\" no core/)", name, name)
+		fail(line, "Route.%s: '%s' não é uma action (declare com \"action %s\" no core/)", fn, name, name)
 	}
 	in.checkAction(fd, line)
 	segs := parsePattern(line, pat)
 	for _, s := range segs {
 		if s.kind == 'r' {
-			fail(line, "Route.action: o caminho '%s' não pode usar {...}", pat)
+			fail(line, "Route.%s: o caminho '%s' não pode usar {...}", fn, pat)
 		}
 		if s.kind == 'p' {
 			found := false
@@ -227,11 +235,11 @@ func (in *Interp) addAction(line int, a []any) {
 				found = found || p.Name == s.text
 			}
 			if !found {
-				fail(line, "Route.action: {%s} na rota não é parâmetro da action '%s'", s.text, name)
+				fail(line, "Route.%s: {%s} na rota não é parâmetro da action '%s'", fn, s.text, name)
 			}
 		}
 	}
-	t.add(line, &route{method: "POST", raw: pat, segs: segs, action: name, returns: ret, line: line})
+	t.add(line, &route{method: method, raw: pat, segs: segs, action: name, returns: ret, line: line})
 }
 
 // Route.site:{"nome": "djo", "about": "A linguagem djo"}: quem é o site, para a saudação de

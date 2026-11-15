@@ -21,6 +21,7 @@ import (
 //	djo agent localhost:8080                    o manifesto, em texto legível
 //	djo agent localhost:8080/posts              a resposta de agente dessa rota
 //	djo agent -post '{"texto":"oi"}' host/posts/2/comentarios    chama uma action
+//	djo agent -method DELETE host/posts/2                         action com outro método
 //	djo agent -raw host                         o JSON como veio
 
 const maxAgentBody = 4 << 20
@@ -29,13 +30,14 @@ func agentCmd(args []string, out, errw io.Writer) int {
 	fs := flag.NewFlagSet("agent", flag.ContinueOnError)
 	fs.SetOutput(errw)
 	post := fs.String("post", "", "chama a rota com POST e este corpo JSON (para actions)")
+	meth := fs.String("method", "", "método da chamada (PUT, PATCH, DELETE...); com -post o padrão é POST")
 	raw := fs.Bool("raw", false, "mostra o JSON sem formatar")
 	timeout := fs.Duration("timeout", 15*time.Second, "tempo máximo")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(errw, "uso: djo agent [-raw] [-post '{...}'] endereço\n  sem caminho (ou com /): mostra o manifesto\n  com caminho: mostra a resposta de agente da rota")
+		fmt.Fprintln(errw, "uso: djo agent [-raw] [-method M] [-post '{...}'] endereço\n  sem caminho (ou com /): mostra o manifesto\n  com caminho: mostra a resposta de agente da rota")
 		return 2
 	}
 	target := fs.Arg(0)
@@ -49,13 +51,16 @@ func agentCmd(args []string, out, errw io.Writer) int {
 	}
 	client := &http.Client{Timeout: *timeout}
 
-	if *post == "" && (u.Path == "" || u.Path == "/") {
+	if *post == "" && *meth == "" && (u.Path == "" || u.Path == "/") {
 		return showManifest(client, u, *raw, out, errw)
 	}
 	method := http.MethodGet
 	var body io.Reader
 	if *post != "" {
 		method, body = http.MethodPost, strings.NewReader(*post)
+	}
+	if *meth != "" {
+		method = strings.ToUpper(*meth)
 	}
 	req, _ := http.NewRequest(method, u.String(), body)
 	req.Header.Set("Accept", "application/json")
@@ -173,7 +178,7 @@ func showManifest(c *http.Client, u *url.URL, raw bool, out, errw io.Writer) int
 			}
 		}
 	}
-	fmt.Fprintf(out, "\nAções (%d)  — envie POST com corpo application/json\n", len(actions))
+	fmt.Fprintf(out, "\nAções (%d)  — envie o método indicado, com corpo application/json\n", len(actions))
 	for _, a := range actions {
 		am, _ := a.(map[string]any)
 		fmt.Fprintf(out, "  %s\n         %s %s\n", str(am["name"]), str(am["method"]), str(am["path"]))
@@ -193,7 +198,7 @@ func showManifest(c *http.Client, u *url.URL, raw bool, out, errw io.Writer) int
 			fmt.Fprintf(out, "           %s\n", line)
 		}
 	}
-	fmt.Fprintf(out, "\nTeste: djo agent %s/<rota>   |   djo agent -post '{...}' %s/<rota da ação>\n", u.Host, u.Host)
+	fmt.Fprintf(out, "\nTeste: djo agent %s/<rota>   |   djo agent [-method M] -post '{...}' %s/<rota da ação>\n", u.Host, u.Host)
 	return 0
 }
 

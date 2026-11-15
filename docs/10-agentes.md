@@ -45,6 +45,20 @@ Route.action:"/posts":"criar_post"
 Route.action:"/posts/{id}/publicar":"publicar"
 ```
 
+`Route.action:` publica por `POST`. Para os outros métodos, use `Route.put_action:`, `Route.patch_action:` e
+`Route.delete_action:`, que fazem o mesmo (validação dos tipos, manifesto, resposta em JSON) com outro método:
+
+```
+Route.action:"/posts":"criar_post"                    // POST   /posts
+Route.put_action:"/posts/{id}":"trocar_post"          // PUT    /posts/3
+Route.patch_action:"/posts/{id}":"mudar_post"         // PATCH  /posts/3
+Route.delete_action:"/posts/{id}":"apagar_post"       // DELETE /posts/3
+```
+
+O mesmo caminho pode ter um método de cada, e junto com uma rota `Route.get:` de leitura. Isso já dá uma API no
+estilo REST. Um método que o caminho não tem responde `405` com o `Allow` certo. No `DELETE` (e em qualquer
+chamada sem corpo) só vale o que vem na URL; se mandar corpo, ele precisa ser `application/json`.
+
 ### O que acontece numa chamada
 
 ```
@@ -52,7 +66,7 @@ curl -X POST localhost:8080/posts -H 'Content-Type: application/json' \
      -d '{"titulo":"Oi","nota":4,"autor":{"nome":"Ana"}}'
 ```
 
-1. É sempre `POST`, e o corpo precisa ser `application/json` (outro tipo dá `415`). Isso também protege contra
+1. O método é o da rota (`POST` em `Route.action:`), e o corpo, se houver, precisa ser `application/json` (outro tipo dá `415`). Isso também protege contra
    CSRF: um site de fora não consegue enviar JSON ao seu servidor pelo navegador.
 2. O corpo é conferido contra os tipos **antes** de a action rodar. Campo faltando, tipo errado ou campo
    desconhecido dá `422`:
@@ -256,7 +270,7 @@ djo agent -raw localhost:8080                # o JSON do manifesto, sem formatar
   campo do corpo (tipo e se é obrigatório).
 - Com caminho, faz a requisição com `Accept: application/json` e mostra o status, o `Content-Type`, o `Link` e o
   corpo formatado. Uma rota só de tela mostra o `406` com a dica de declarar `"agent"`.
-- `-post` envia o corpo como `application/json`. As opções vêm **antes** do endereço.
+- `-post` envia o corpo como `application/json`. `-method` troca o método (`PUT`, `PATCH`, `DELETE`); com `-post` e sem `-method` é `POST`. As opções vêm **antes** do endereço.
 - Sem `http://`, ele assume `http://`. Sai com código `1` se a resposta for 4xx/5xx ou o site não responder,
   então serve em scripts.
 - É só HTTP: o mesmo resultado sai de `curl -H "Accept: application/json" ...`. Não vem nos builds `nano`

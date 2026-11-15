@@ -89,3 +89,26 @@ func TestAgentSemManifestoEErros(t *testing.T) {
 		t.Errorf("sem servidor = %d %q", code, errs)
 	}
 }
+
+func TestAgentMetodo(t *testing.T) {
+	ts := site(t, map[string]string{
+		"core/m.djo": coreAcoesMetodos,
+		"rotas.djo": `Route.put_action:"/posts/{id}":"trocar_post"
+Route.delete_action:"/posts/{id}":"apagar_post"
+`,
+	})
+	code, out, _ := agentRun("-method", "put", "-post", `{"titulo":"Novo"}`, ts.URL+"/posts/3")
+	if code != 0 || !strings.Contains(out, "PUT "+ts.URL+"/posts/3") || !strings.Contains(out, `"metodo": "PUT"`) {
+		t.Errorf("PUT: %d\n%s", code, out)
+	}
+	// DELETE não precisa de corpo
+	code, out, _ = agentRun("-method", "DELETE", ts.URL+"/posts/9")
+	if code != 0 || !strings.Contains(out, "DELETE ") || !strings.Contains(out, `"apagado": 9`) {
+		t.Errorf("DELETE: %d\n%s", code, out)
+	}
+	// o manifesto mostra o método de cada ação
+	_, out, _ = agentRun(ts.URL)
+	if !strings.Contains(out, "PUT /posts/{id}") || !strings.Contains(out, "DELETE /posts/{id}") {
+		t.Errorf("manifesto:\n%s", out)
+	}
+}

@@ -22,7 +22,7 @@ import (
 //	    params[titulo[String], texto[String]]
 //	    ...
 //
-// Em rotas.djo: Route.action:"/posts":"criar_post" (POST, corpo JSON). A entrada é
+// Em rotas.djo: Route.action:"/posts":"criar_post" (POST, corpo JSON; também Route.put_action:, patch_action: e delete_action:). A entrada é
 // conferida contra os tipos, e o manifesto descreve a ação com um JSON Schema.
 
 const manifestPath = "/.well-known/ai-manifest.json"

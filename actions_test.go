@@ -227,3 +227,109 @@ func TestActionTambemEFuncao(t *testing.T) {
 		t.Errorf("out=%q err=%v", out, err)
 	}
 }
+
+const coreAcoesMetodos = `action trocar_post
+    "Troca um post"
+    params[id[Int], titulo[String]]
+    return {"id": id, "titulo": titulo, "metodo": Http.method:}
+
+action mudar_post
+    params[id[Int], titulo[String]]
+    return {"id": id, "titulo": titulo}
+
+action apagar_post
+    "Apaga um post"
+    params[id[Int]]
+    Http.status:200
+    return {"apagado": id}
+`
+
+func TestAcoesComOutrosMetodos(t *testing.T) {
+	ts := site(t, map[string]string{
+		"core/m.djo": coreAcoesMetodos,
+		"rotas.djo": `Route.put_action:"/posts/{id}":"trocar_post"
+Route.patch_action:"/posts/{id}":"mudar_post"
+Route.delete_action:"/posts/{id}":"apagar_post"
+Route.get:"/posts/{id}":{"agent": "p/ver.djo"}
+`,
+		"p/ver.djo": `Http.json:{"id": param:"id"}`,
+	})
+	do := func(method, p, ctype, body string) (int, string, http.Header) {
+		req, _ := http.NewRequest(method, ts.URL+p, strings.NewReader(body))
+		if ctype != "" {
+			req.Header.Set("Content-Type", ctype)
+		}
+		req.Header.Set("Accept", "application/json")
+		resp, err := noRedirect.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, strings.TrimSpace(string(b)), resp.Header
+	}
+	if c, b, _ := do("PUT", "/posts/3", "application/json", `{"titulo":"Novo"}`); c != 200 || b != `{"id":3,"titulo":"Novo","metodo":"PUT"}` {
+		t.Errorf("PUT = %d %s", c, b)
+	}
+	if c, b, _ := do("PATCH", "/posts/3", "application/json", `{"titulo":"Parcial"}`); c != 200 || b != `{"id":3,"titulo":"Parcial"}` {
+		t.Errorf("PATCH = %d %s", c, b)
+	}
+	// DELETE sem corpo: só o que vem na URL
+	if c, b, _ := do("DELETE", "/posts/9", "", ""); c != 200 || b != `{"apagado":9}` {
+		t.Errorf("DELETE = %d %s", c, b)
+	}
+	// as mesmas regras da action POST: tipos conferidos, corpo precisa ser JSON
+	if c, b, _ := do("PUT", "/posts/3", "application/json", `{"titulo": 5}`); c != 422 || !strings.Contains(b, `"titulo":"deve ser String, mas veio Int"`) {
+		t.Errorf("PUT inválido = %d %s", c, b)
+	}
+	if c, _, _ := do("PUT", "/posts/3", "application/x-www-form-urlencoded", "titulo=x"); c != 415 {
+		t.Errorf("PUT de formulário = %d, queria 415", c)
+	}
+	if c, _, _ := do("DELETE", "/posts/abc", "", ""); c != 422 {
+		t.Errorf("DELETE com id inválido = %d, queria 422", c)
+	}
+	// o método errado dá 405 com o Allow certo
+	c, _, h := do("POST", "/posts/3", "application/json", `{}`)
+	if c != 405 || h.Get("Allow") != "DELETE, GET, PATCH, PUT" {
+		t.Errorf("POST = %d Allow=%q", c, h.Get("Allow"))
+	}
+
+	// o manifesto traz cada ação com o seu método
+	_, body, _ := do("GET", "/.well-known/ai-manifest.json", "", "")
+	var m struct {
+		Actions []struct{ Name, Method, Path string } `json:"actions"`
+	}
+	if err := json.Unmarshal([]byte(body), &m); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, a := range m.Actions {
+		got[a.Name] = a.Method + " " + a.Path
+	}
+	for name, want := range map[string]string{
+		"trocar_post": "PUT /posts/{id}", "mudar_post": "PATCH /posts/{id}", "apagar_post": "DELETE /posts/{id}",
+	} {
+		if got[name] != want {
+			t.Errorf("manifesto: %s = %q, queria %q", name, got[name], want)
+		}
+	}
+}
+
+func TestAcoesOutrosMetodosErros(t *testing.T) {
+	core := "action boa\n    params[x[Int]]\n    return x\n\nf comum\n    params[x[Int]]\n    return x\n"
+	cases := map[string]string{
+		`Route.put_action:"/a/{x}":"comum"`:                                        "Route.put_action: 'comum' não é uma action",
+		`Route.delete_action:"/a/{y}":"boa"`:                                       "Route.delete_action: {y} na rota não é parâmetro",
+		`Route.patch_action:"/a":1`:                                                "Route.patch_action espera",
+		"Route.put_action:\"/a/{x}\":\"boa\"\nRoute.put_action:\"/a/{x}\":\"boa\"": "já foi declarada",
+	}
+	for src, want := range cases {
+		root := t.TempDir()
+		os.MkdirAll(filepath.Join(root, "core"), 0o755)
+		os.WriteFile(filepath.Join(root, "core", "c.djo"), []byte(core), 0o644)
+		os.WriteFile(filepath.Join(root, "rotas.djo"), []byte(src), 0o644)
+		if _, err := NewServer(root, false); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: erro %v, queria %q", src, err, want)
+		}
+	}
+}
