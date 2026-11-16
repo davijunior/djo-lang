@@ -74,6 +74,7 @@ type Interp struct {
 	steps, maxSteps int   // maxSteps>0 limita a execução (servidor)
 	Echo            bool  // REPL: mostra o valor de expressões soltas
 	dbs             dbState
+	ask             *askConfig          // só enquanto o ask.djo é lido
 	boosters        map[string]*booster // boosters/ do projeto, pelo nome
 	cur             *booster            // booster em execução (nil: core ou página)
 }

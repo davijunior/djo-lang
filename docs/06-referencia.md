@@ -223,6 +223,59 @@ Propriedades, sem `:`: em `Date`, `year`, `month`, `day` e `weekday` (0 = doming
 - **Em actions e rotas:** o corpo JSON e a URL aceitam só o formato ISO (`AAAA-MM-DD`; `AAAA-MM-DDTHH:MM:SSZ`);
   outro formato ou uma data que não existe dá `422` no campo certo. Veja [Agentes](10-agentes.md).
 
+## Ask (`/ask` e `djo ask`)
+
+Perguntas em linguagem natural (inglês e português) para **humanos**; agentes seguem usando o manifesto e as actions.
+Só lê. Sem `ask.djo` na raiz o `/ask` não existe. O `ask.djo` só aceita chamadas `Ask.*` e nunca é servido.
+Guia completo: `docs/ask.md`.
+
+| Chamada | O que faz |
+|---|---|
+| `Ask.db:"site.db"` | **Obrigatório.** O banco consultado: arquivo `.db`/`.sqlite` do site ou `postgres://` / `mysql://` |
+| `Ask.type:"post":{...}` | Um tipo consultável: `table`, `struct`, `fields` (cada campo com `column`, `kind`, `attr`, `as`, `main`...) |
+| `Ask.level:"public":{"allow": [...]}` | O que cada nível enxerga (`public < agent < admin`): `type`, `where` fixo, `fields` |
+| `Ask.deny:["user.password"]` | Campos que ninguém enxerga, em nenhuma operação |
+| `Ask.alias:"post":["artigos"]` | Apelidos de tipo (`"post"`) ou de campo (`"post.title"`), em minúsculas |
+| `Ask.limits:{...}` | `max_results` (1–1000), `per_minute` por IP e por token, `global_per_minute` (teto global opcional), `timeout_ms` (100–10000) |
+| `Ask.reply:{"refused": ..., "unknown": ...}` | Mensagens de "não aceito" e "não entendi", um texto ou `{"en": ..., "pt": ...}` |
+| `Ask.level_from:"nivel_do_pedido"` | Função do `core/` (sem parâmetros, não action) que devolve `"public"`, `"agent"` ou `"admin"`; lê o pedido com `Http.bearer:` ou a sessão. Sem ela tudo é `public` e tokens dão 401 |
+| `Ask.proxy:["127.0.0.1", "10.0.0.0/8"]` | Proxies de confiança. Só quando a conexão vem de um deles o `X-Forwarded-For` é lido (usa o último IP não confiável da cadeia) |
+
+Níveis: falha fechada. Sem gancho, erro, `nil` ou valor desconhecido = `public`; token Bearer presente que o gancho
+não aceita = 401. O nível nunca depende do que a pessoa escreveu.
+
+**Atrás de nginx ou outro proxy**, sem `Ask.proxy` o IP de todos é o do proxy: o limite por IP vira um limite
+único para todos os anônimos. Liste o proxy em `Ask.proxy` e faça-o enviar `X-Forwarded-For`.
+
+`per_minute` conta por processo, em memória: com várias instâncias, cada uma tem o seu limite.
+
+**Toda pergunta é um POST** (nunca vai na URL): `POST /ask` `{"question": "...", "page": 2, "lang": "pt"}` responde JSON
+(`answer`, `data`, `page`, `more`, `next`, `calls`, `confirm: null`...). `GET /ask` no navegador mostra só a página com a
+caixa de pergunta, que envia por POST de formulário; `GET /ask?q=...` ignora a pergunta.
+
+```
+djo ask meusite.com "list posts from 2025-01-01 to 2025-03-30"
+djo ask --page 2 meusite.com "liste posts primeiros 5"
+djo ask 'djo://meusite.com/ask="me da a lista de posts"'
+```
+
+`djo ask`: `https` obrigatório (só `localhost`, `127.0.0.1` e `::1` aceitam `http://`; `--insecure` libera o resto);
+o token vai em `DJO_ASK_TOKEN`, `--token-file` ou `--token-stdin` (nunca em argumento); redirecionamentos não são
+seguidos; o texto do servidor sai com os caracteres de controle do terminal escapados. `--json` imprime a resposta como veio.
+Códigos de saída: 0 ok · 1 uso · 2 rede ou servidor · 3 recusado, não entendi ou site sem `/ask` · 4 token recusado ou limite.
+`djo://site/ask='...'` é só açúcar para o endereço https: nenhum handler é registrado no sistema.
+
+Palavras de ligação (`o a que tenha tem the which has...`) são ignoradas entre as condições; `e`/`and`/`,` ligam condições (só
+E). Tag: `tem a tag X`, `com a tag X`, `marcados com X`, `tagged X`, `has the tag X`. Texto: `titulo contem|contendo|comeca com|igual a X`.
+Recusado de propósito, com o motivo (kind `unsupported`, 422): OU/or, negação, mês por extenso e datas relativas.
+
+**Aliases em português.** Nomes de campo e de tipo vêm do `ask.djo` (`Ask.alias:"post.title":["titulo"]`). Para nomes comuns de
+**campo** o djo já entende um apelido padrão (`title`=titulo, `text`=texto, `body`=corpo/conteudo, `tags`=etiquetas, `status`=situacao,
+`name`=nome, `views`=visualizacoes, `created_at`=criado em/criado, `published_at`=publicado em/publicado...), só se o campo existe e o nível o
+enxerga. O que o `ask.djo` declara vence o padrão; tipos nunca têm padrão (declare `Ask.alias:"post":["artigos"]`).
+
+> **Não verificado:** consultas em PostgreSQL e MySQL (o SQL só foi conferido como texto) e parâmetros `Date`/`DateTime` nesses bancos.
+
 ## Boosters
 
 | Comando | O que faz |

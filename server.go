@@ -49,6 +49,7 @@ type Server struct {
 	rsize        int64
 	lane         *lane // limites do tráfego de agentes
 	rcache       respCache
+	askx         askState
 }
 
 func NewServer(dir string, dev bool) (*Server, error) {
@@ -65,6 +66,9 @@ func NewServer(dir string, dev bool) (*Server, error) {
 	}
 	if p := verifyBoosters(real); len(p) > 0 {
 		return nil, fmt.Errorf("%s", strings.Join(p, "\n"))
+	}
+	if err := checkAsk(real); err != nil {
+		return nil, err
 	}
 	srv := &Server{root: real, realRoot: real, dev: dev, maxSteps: 10_000_000, lane: newLane(0, 50)}
 	if _, err := srv.table(); err != nil {
@@ -98,6 +102,9 @@ func hidden(urlPath string) bool {
 			return true // bancos de dados nunca são servidos
 		}
 	}
+	if strings.EqualFold(urlPath, "/ask.djo") {
+		return true // a política do /ask nunca é servida
+	}
 	if urlPath == "/core" || strings.HasPrefix(urlPath, "/core/") || urlPath == "/boosters" || strings.HasPrefix(urlPath, "/boosters/") {
 		return true // o core do sistema e os boosters nunca são servidos
 	}
@@ -115,6 +122,9 @@ func isFile(p string) bool {
 }
 
 func (s *Server) route(w http.ResponseWriter, r *http.Request) {
+	if s.serveAsk(w, r) {
+		return
+	}
 	t, err := s.table()
 	if err != nil {
 		s.serverError(w, r, err)

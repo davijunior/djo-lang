@@ -24,6 +24,9 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "agent" {
 		os.Exit(agentMain(os.Args[2:]))
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "ask" {
+		os.Exit(askMain(os.Args[2:]))
+	}
 	if len(os.Args) == 2 && (os.Args[1] == "version" || os.Args[1] == "--version") {
 		fmt.Println(versionInfo())
 		return
@@ -32,7 +35,7 @@ func main() {
 		os.Exit(serveCmd(os.Args[2:]))
 	}
 	if len(os.Args) > 2 || (len(os.Args) == 2 && (os.Args[1] == "-h" || os.Args[1] == "--help")) {
-		fmt.Fprintln(os.Stderr, "uso: djo [arquivo.djo | arquivo.djo.html]\n     djo version\n     djo new [-modelo site|script|iot] pasta\n     djo booster list|add pasta|remove nome|verify\n     djo build [-o app] [-runtime djo-de-outra-maquina] [pasta]\n     djo serve [-addr host:porta] [-dev] [pasta]\n     djo agent [-raw] [-post '{...}'] endereço\n  sem argumentos abre o REPL")
+		fmt.Fprintln(os.Stderr, "uso: djo [arquivo.djo | arquivo.djo.html]\n     djo version\n     djo new [-modelo site|script|iot] pasta\n     djo booster list|add pasta|remove nome|verify\n     djo build [-o app] [-runtime djo-de-outra-maquina] [pasta]\n     djo serve [-addr host:porta] [-dev] [pasta]\n     djo agent [-raw] [-post '{...}'] endereço\n     djo ask [--json] [--page N] site \"pergunta\"\n  sem argumentos abre o REPL")
 		os.Exit(2)
 	}
 	if len(os.Args) == 2 {
