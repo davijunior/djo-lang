@@ -120,3 +120,18 @@ func TestAskHTTPDetailPaginaEscapada(t *testing.T) {
 		t.Errorf("faltam os campos do item:\n%s", page)
 	}
 }
+
+func TestAskRotuloPTNoEncontrei(t *testing.T) {
+	cfg := askDetailFx(t, askPageDjo).cfg
+	if got := askSingularLabel(cfg, "pt", "page"); got != "página" {
+		t.Errorf("pt: %q", got)
+	}
+	if got := askSingularLabel(cfg, "en", "page"); got != "page" {
+		t.Errorf("en: %q", got)
+	}
+	// sem apelido no singular, vale o nome do tipo
+	cfg2 := askDetailFx(t, askDetailDjo(askDetailAll, "")).cfg
+	if got := askSingularLabel(cfg2, "pt", "post"); got != "post" {
+		t.Errorf("sem apelido singular: %q", got)
+	}
+}

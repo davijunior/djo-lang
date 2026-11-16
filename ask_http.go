@@ -422,7 +422,7 @@ func (s *Server) askAnswer(cfg *askConfig, level, question string, page int64, h
 		}
 		return nil, 0, ae
 	}
-	return askBuildResponse(lang, plan, res), http.StatusOK, nil
+	return askBuildResponse(lang, plan, res, askSingularLabel(cfg, lang, plan.Type)), http.StatusOK, nil
 }
 
 var askSay = map[string]map[string]string{
@@ -438,7 +438,22 @@ var askSay = map[string]map[string]string{
 	},
 }
 
-func askBuildResponse(lang string, plan askPlan, res *askResult) *Map {
+// askSingularLabel é o nome do tipo, no singular, para frases como "Encontrei: página.": em português
+// o primeiro apelido declarado que não termina em "s"; senão o nome do tipo.
+func askSingularLabel(cfg *askConfig, lang, typ string) string {
+	if lang == "pt" {
+		if t := cfg.types[typ]; t != nil {
+			for _, a := range t.aliases {
+				if !strings.HasSuffix(a, "s") {
+					return strings.ReplaceAll(a, "_", " ")
+				}
+			}
+		}
+	}
+	return typ
+}
+
+func askBuildResponse(lang string, plan askPlan, res *askResult, label string) *Map {
 	say := askSay[lang]
 	m := newMap()
 	m.set("lang", lang)
@@ -447,7 +462,7 @@ func askBuildResponse(lang string, plan askPlan, res *askResult) *Map {
 	case plan.CountOnly:
 		text = askSprintf(say["count"], int(res.Count))
 	case plan.Show && res.Item:
-		text = askSprintf(say["found"], plan.Type)
+		text = askSprintf(say["found"], label)
 	case plan.Show && res.Ambiguous:
 		text = askSprintf(say["several"], len(res.Items))
 	case plan.Show:
