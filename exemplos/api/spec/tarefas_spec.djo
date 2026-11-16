@@ -1,0 +1,52 @@
+// Specs da API de tarefas. Rode na pasta da API:
+//
+//     djo booster add ../../boosters-oficiais/expect     (uma vez: instala os matchers)
+//     djo spec
+//
+// Cada it_* roda isolado: o banco (api.db) é um arquivo novo numa pasta temporária, apagada no fim.
+// O antes cria a tabela e um token; as chamadas Spec.get/post/... vão direto ao site, sem porta.
+
+var token = "token-de-teste"
+
+f antes
+    abrir:
+    Db.exec:"INSERT INTO tokens (hash) VALUES (?)":[Hash.sha256:token]
+
+f autenticado
+    return {"Authorization": "Bearer " + token}
+
+f it_lista_comeca_vazia
+    var r = Spec.get:"/tarefas":(autenticado:)
+    expect.status:r:200
+    expect.eq:(Json.decode:r["body"]):[]
+
+f it_sem_token_e_recusado
+    var r = Spec.get:"/tarefas"
+    expect.status:r:401
+
+f it_cria_uma_tarefa
+    var r = Spec.post:"/tarefas":{"titulo": "estudar"}:(autenticado:)
+    expect.status:r:201
+    expect.json:r:"titulo":"estudar"
+    expect.json:r:"feita":false
+
+f it_titulo_vazio_da_400
+    var r = Spec.post:"/tarefas":{"titulo": ""}:(autenticado:)
+    expect.status:r:400
+
+f it_o_banco_e_zerado_a_cada_spec
+    var r = Spec.get:"/tarefas":(autenticado:)
+    expect.len:(Json.decode:r["body"]):0
+
+f it_marca_feita
+    Spec.post:"/tarefas":{"titulo": "a"}:(autenticado:)
+    var r = Spec.patch:"/tarefas/1/feita":{"feita": true}:(autenticado:)
+    expect.status:r:200
+    expect.json:r:"feita":true
+
+f it_apaga
+    Spec.post:"/tarefas":{"titulo": "a"}:(autenticado:)
+    var r = Spec.delete:"/tarefas/1":(autenticado:)
+    expect.status:r:200
+    var depois = Spec.get:"/tarefas/1":(autenticado:)
+    expect.status:depois:404

@@ -81,8 +81,9 @@ Um **booster** é código pronto em djo que o projeto chama pelo nome: `djo boos
 11. [Releases](docs/11-releases.md): instalar sem Go e publicar uma versão
 12. [Boosters](docs/12-boosters.md): código pronto que o projeto chama pelo nome (o primeiro é o `markdown`)
 13. [Fazendo uma API](docs/13-api.md): leituras, `action`s com `PUT`/`PATCH`/`DELETE`, token (`Http.bearer:`) e CORS
+14. [Testes](docs/14-testes.md): `djo spec`, funções `it_...` e o booster `expect`, com rotas chamadas em processo
 
-Exemplos prontos em `exemplos/` (`exemplos/site/` é um site simples; `exemplos/blog/` tem login, banco e upload; `exemplos/api/` é uma API de tarefas com token e CORS).
+Exemplos prontos em `exemplos/` (`exemplos/site/` é um site simples; `exemplos/blog/` tem login, banco e upload; `exemplos/api/` é uma API de tarefas com token e CORS, e tem `spec/` com os testes dela).
 
 ## Editor
 

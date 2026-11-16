@@ -291,6 +291,14 @@ enxerga. O que o `ask.djo` declara vence o padrão; tipos nunca têm padrão (de
 
 No código: `nome.função:argumento`, por exemplo `markdown.render:texto`. Um booster só enxerga o próprio código, e o projeto só alcança as `f` do `main.djo` dele. Veja [Boosters](12-boosters.md).
 
+## Testes (`djo spec`)
+
+```
+djo spec [-e filtro] [--json] [--lang en] [--seed N] [pasta | arquivo_spec.djo]
+```
+
+Roda as funções `it_...` dos arquivos `*_spec.djo` (com `antes` e `depois` opcionais), cada uma isolada e com os bancos SQLite numa pasta temporária. Sai com `1` se algum teste falhar ou der erro. O namespace `Spec` (`fail`, `skip`, `try`, `lang`, `get`, `post`, `put`, `patch`, `delete`) **só existe dentro do `djo spec`**; fora dele, qualquer chamada dá erro. Os matchers (`expect.eq:real:esperado`, `include`, `raises`, `status`, `json`...) vêm do booster `expect`. A pasta `spec/` nunca é servida nem entra no `djo build`. Veja [Testes](14-testes.md).
+
 ## Mensagens de erro
 
 Todo erro traz a linha: `erro (linha 12): ...`. Os mais comuns:
@@ -303,6 +311,7 @@ Todo erro traz a linha: `erro (linha 12): ...`. Os mais comuns:
 | `a condição do if precisa ser Bool, mas é Int` | condição que não é `true`/`false` |
 | `'super' só existe dentro de método de uma struct com sonof` | `super` fora de lugar |
 | `o core só declara structs e funções` | código solto em `core/` |
+| `Spec.fail só existe quando os testes rodam com 'djo spec'` | `Spec` chamado fora do `djo spec` (veja [Testes](14-testes.md)) |
 | `o booster 'x' usa File mas não declarou essa permissão` | falta a permissão no `booster.json` (veja [Boosters](12-boosters.md)) |
 | `a página demorou demais` | passou do limite de passos |
 
