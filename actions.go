@@ -497,6 +497,7 @@ func (s *Server) runAction(w http.ResponseWriter, r *http.Request, t *routeTable
 	in.resp = &response{status: http.StatusOK, header: http.Header{}}
 	in.maxSteps = s.maxSteps
 	in.served = !s.allowPrivate
+	in.mail = s.mailHost()
 	if err := in.loadCore(s.root); err != nil {
 		s.agentError(w, r, err)
 		return

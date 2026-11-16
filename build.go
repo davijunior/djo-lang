@@ -30,7 +30,7 @@ func buildExcluded(rel string, d fs.DirEntry, ignore []string) bool {
 		return true
 	}
 	if d.IsDir() {
-		if rel == "dist" || rel == "spec" || base == "node_modules" {
+		if rel == "dist" || rel == "spec" || rel == "_saida" || base == "node_modules" {
 			return true
 		}
 	} else {

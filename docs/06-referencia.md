@@ -150,6 +150,15 @@ serviços): ficam fora do código e do executável (`djo build` não leva o ambi
 `f` do projeto pode ler todas as variáveis do processo, então **nunca imprima** o resultado em uma página. Um
 booster só usa `Env` se pedir a permissão no `booster.json`.
 
+## Mail
+
+| Chamada | O que faz |
+|---|---|
+| `Mail.send:{"to": ..., "subject": ..., "text": ..., "html": ..., "cc": ..., "bcc": ..., "reply_to": ..., "from": ...}` | envia um e-mail por SMTP e devolve `{"ok", "id", "sent", "error"}` |
+| `Spec.emails:` | (só no `djo spec`) os e-mails que o `Mail.send` "enviou" no teste atual |
+
+`to`, `subject` e `text` são obrigatórios; `from` só troca o nome exibido (o endereço é sempre o de `DJO_SMTP_FROM`). A configuração vem **só do ambiente** (`DJO_SMTP_HOST`, `DJO_SMTP_PORT`, `DJO_SMTP_USER`, `DJO_SMTP_PASS`, `DJO_SMTP_FROM`, `DJO_SMTP_SECURE`), com STARTTLS obrigatório (ou TLS na 465) e certificado sempre verificado. Em `djo serve -dev` não envia: grava `.eml` em `_saida/emails/` (use `-mail-send` para enviar mesmo assim). No `djo spec` nunca envia. Não existe nos builds `nonet`; um booster precisa da permissão `Mail`. Veja [E-mail](15-email.md).
+
 ## Time
 
 Datas são `Int`: segundos desde 1970 (UTC). Somar e subtrair é aritmética comum
@@ -299,7 +308,7 @@ No código: `nome.função:argumento`, por exemplo `markdown.render:texto`. Um b
 djo spec [-e filtro] [--json] [--lang en] [--seed N] [pasta | arquivo_spec.djo]
 ```
 
-Roda as funções `it_...` dos arquivos `*_spec.djo` (com `antes` e `depois` opcionais), cada uma isolada e com os bancos SQLite numa pasta temporária. Sai com `1` se algum teste falhar ou der erro. O namespace `Spec` (`fail`, `skip`, `try`, `lang`, `get`, `post`, `put`, `patch`, `delete`) **só existe dentro do `djo spec`**; fora dele, qualquer chamada dá erro. Os matchers (`expect.eq:real:esperado`, `include`, `raises`, `status`, `json`...) vêm do booster `expect`. A pasta `spec/` nunca é servida nem entra no `djo build`. Veja [Testes](14-testes.md).
+Roda as funções `it_...` dos arquivos `*_spec.djo` (com `antes` e `depois` opcionais), cada uma isolada e com os bancos SQLite numa pasta temporária. Sai com `1` se algum teste falhar ou der erro. O namespace `Spec` (`fail`, `skip`, `try`, `lang`, `emails`, `get`, `post`, `put`, `patch`, `delete`) **só existe dentro do `djo spec`**; fora dele, qualquer chamada dá erro. Os matchers (`expect.eq:real:esperado`, `include`, `raises`, `status`, `json`...) vêm do booster `expect`. A pasta `spec/` nunca é servida nem entra no `djo build`. Veja [Testes](14-testes.md).
 
 ## Mensagens de erro
 

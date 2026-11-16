@@ -34,6 +34,7 @@ type specCtx struct {
 	file   string // caminho relativo do arquivo de spec
 	lang   string
 	dbRoot string
+	mails  *mailBox
 	server any // *Server, criado na primeira chamada de rota (spec_web.go)
 }
 
@@ -104,6 +105,10 @@ func init() {
 			sg.msg = "falhou"
 		}
 		panic(sg)
+	}}
+	// Spec.emails devolve os e-mails que o Mail.send "enviou" neste spec (nada sai de verdade).
+	ns["emails"] = builtin{0, func(in *Interp, env *Env, line int, a []any) any {
+		return need(in, "emails", line).mails.list()
 	}}
 	// Spec.skip:"motivo" marca o spec como pulado e para.
 	ns["skip"] = builtin{1, func(in *Interp, env *Env, line int, a []any) any {
@@ -518,7 +523,7 @@ func specRun(root, file string, prog []Stmt, fn, desc, lang string) (res specRes
 	in.maxSteps = specMaxSteps
 	in.deadline = time.Now().Add(specTimeout)
 	in.served = true
-	in.spec = &specCtx{root: root, file: file, lang: lang, dbRoot: tmp}
+	in.spec = &specCtx{root: root, file: file, lang: lang, dbRoot: tmp, mails: &mailBox{}}
 	defer in.closeTx()
 	defer func() {
 		if in.spec != nil {

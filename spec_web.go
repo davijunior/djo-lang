@@ -24,6 +24,7 @@ func specServer(c *specCtx, line int) *Server {
 		fail(line, "Spec: não consegui montar o site para o teste: %v", err)
 	}
 	s.dbRoot = c.dbRoot
+	s.mailBox = c.mails
 	s.maxSteps = specMaxSteps
 	c.server = s
 	return s

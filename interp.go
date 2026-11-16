@@ -83,7 +83,8 @@ type Interp struct {
 	outerLine       int                 // linha, no código do projeto, da última chamada a um booster
 	pStructs        map[string]*StructDecl
 	pIfaces         map[string]*InterfaceDecl
-	cur             *booster // booster em execução (nil: core ou página)
+	cur             *booster  // booster em execução (nil: core ou página)
+	mail            *mailHost // o que fazer com Mail.send numa página servida (nil: enviar de verdade)
 }
 
 const maxDepth = 2000

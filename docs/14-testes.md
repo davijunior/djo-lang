@@ -122,6 +122,7 @@ A negação existe só em `not_eq`. Para negar os outros, confira uma condição
 | `Spec.fail:{"mensagem": m, "esperado": e, "recebido": r}` | o mesmo, com esperado e recebido no relatório |
 | `Spec.skip:"motivo"` | marca o teste como pulado e para |
 | `Spec.try:"funcao":[args]` | chama uma função **do projeto** e devolve `{"ok", "value", "error", "line"}`; captura o erro de execução, mas deixa passar `Spec.fail` e `Spec.skip` |
+| `Spec.emails:` | a lista dos e-mails que o `Mail.send` "enviou" neste teste (nada sai de verdade); veja [E-mail](15-email.md) |
 | `Spec.lang:` | `"pt"` ou `"en"`, o idioma do relatório |
 | `Spec.get:"/caminho"` `Spec.delete:"/caminho"` | chama uma rota, action ou página do site, em processo |
 | `Spec.post:"/caminho":corpo` `put` `patch` | o mesmo, com corpo |

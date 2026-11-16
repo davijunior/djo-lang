@@ -50,7 +50,9 @@ type Server struct {
 	lane         *lane // limites do tráfego de agentes
 	rcache       respCache
 	askx         askState
-	dbRoot       string // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
+	mailSend     bool     // -dev: Mail.send envia de verdade em vez de gravar o .eml
+	mailBox      *mailBox // o djo spec: captura os e-mails
+	dbRoot       string   // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
 }
 
 func NewServer(dir string, dev bool) (*Server, error) {
@@ -95,6 +97,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.logger != nil {
 		s.logger.Printf("%s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
 	}
+}
+
+func (s *Server) mailHost() *mailHost {
+	return &mailHost{dev: s.dev && !s.mailSend, box: s.mailBox}
 }
 
 func hidden(urlPath string) bool {
@@ -263,6 +269,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 	in.resp = &response{status: status, header: http.Header{}}
 	in.maxSteps = s.maxSteps
 	in.served = !s.allowPrivate
+	in.mail = s.mailHost()
 	if err := in.loadCore(s.root); err != nil {
 		s.serverError(w, r, err)
 		return
@@ -320,6 +327,7 @@ func serveCmd(args []string) int {
 	dev := fs.Bool("dev", false, "mostra os erros na própria página")
 	agentConc := fs.Int("agent-conc", 0, "máximo de requisições de agente em execução ao mesmo tempo (0 = 2 por núcleo)")
 	agentRate := fs.Float64("agent-rate", 50, "requisições de agente por segundo, por cliente (0 = sem limite)")
+	mailSend := fs.Bool("mail-send", false, "com -dev, Mail.send envia de verdade (por padrão grava o .eml em _saida/emails)")
 	allowPrivate := fs.Bool("allow-private", false, "deixa as páginas chamarem endereços internos (rede local) com Http.get/post")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -334,6 +342,7 @@ func serveCmd(args []string) int {
 		return 1
 	}
 	srv.allowPrivate = *allowPrivate
+	srv.mailSend = *mailSend
 	srv.lane = newLane(*agentConc, *agentRate)
 	srv.logger = log.New(os.Stderr, "", log.LstdFlags)
 
