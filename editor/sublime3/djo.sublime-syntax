@@ -99,7 +99,7 @@ contexts:
       scope: constant.language.null.djo
 
   types:
-    - match: '\b(Int|Float|String|Bool|Arr|Map|Any)\b'
+    - match: '\b(Int|Float|String|Bool|Arr|Map|Any|Date|DateTime)\b'
       scope: storage.type.djo
 
   # nome:  |  nome:a:b  |  obj.metodo:a

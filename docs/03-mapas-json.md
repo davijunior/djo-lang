@@ -61,6 +61,7 @@ print d["tags"][0]                   // a
 | `Arr`                  | array     |
 | `Int`, `Float`         | número    |
 | `String`, `Bool`, `nil`| igual     |
+| `Date`, `DateTime`     | texto ISO: `"2025-01-31"`, `"2025-01-31T14:05:00Z"` |
 
 Na volta, inteiro vira `Int`, decimal vira `Float`, objeto vira `Map` e array vira `Arr`.
 Estruturas fundas demais ou com ciclo dão erro ao codificar.

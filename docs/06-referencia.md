@@ -174,6 +174,55 @@ var t = Time.parse:"2025-01-31":"YYYY-MM-DD"
 print (Time.date:t)["month"]                       // 1
 ```
 
+## Date e DateTime
+
+`Date` é um dia do calendário, sem hora nem fuso (`2025-01-31`). `DateTime` é um instante, sempre em **UTC**
+(`2025-01-31T14:05:00Z`). Os dois vão e voltam como texto ISO no JSON, aparecem no manifesto como `string` com
+`format` `date` e `date-time`, e um campo ou parâmetro vazio é `nil`. O `Time` (segundos em `Int`) continua igual.
+
+```
+struct Evento
+    nome[String]
+    dia[Date]
+    inicio[DateTime] = DateTime.now:
+
+var d = Date.make:2025:1:31
+print d + 1                         // 2025-02-01   (Date + Int soma dias)
+print Date.parse:"2025-03-30" - d   // 58           (Date - Date dá dias)
+print d.year                        // 2025
+print d.format:"DD/MM/YYYY"         // 31/01/2025
+```
+
+| Chamada | Faz |
+|---------|-----|
+| `Date.today:` | o dia de hoje (em UTC) |
+| `Date.make:2025:1:31` | cria; uma data que não existe (`2025-02-31`) é erro |
+| `Date.parse:"2025-01-31"` | texto ISO para `Date`, ou `nil` se não bater |
+| `Date.parse:"31/01/2025":"DD/MM/YYYY"` | com formato (`YYYY MM DD`); `nil` se não bater |
+| `Date.of:valor` | o dia de um `DateTime` (ou o próprio `Date`) |
+| `DateTime.now:` | agora |
+| `DateTime.make:2025:1:31` / `:14:5:0` | meia-noite do dia, ou com hora, minuto e segundo |
+| `DateTime.parse:texto` | RFC 3339 (`2025-01-31T14:05:00Z`, ou com deslocamento como `-03:00`, convertido para UTC) ou o formato de banco `"2025-01-31 14:05:00"` (lido como UTC); `nil` se não bater |
+| `DateTime.parse:texto:"DD/MM/YYYY HH:mm"` | com formato; `nil` se não bater |
+| `DateTime.from_unix:n` | de segundos desde 1970 |
+| `DateTime.of:data` | meia-noite UTC do dia |
+| `DateTime.end_of:data` | 23:59:59 UTC do dia (para "até a data, inclusive") |
+
+Propriedades, sem `:`: em `Date`, `year`, `month`, `day` e `weekday` (0 = domingo); em `DateTime`, também `hour`,
+`minute`, `second`, `unix` (segundos desde 1970) e `date`. O método `format:"..."` usa os mesmos símbolos do
+`Time.format` (`YYYY MM DD HH mm ss`); em um `Date`, `HH`, `mm` e `ss` são erro.
+
+- **Contas:** `Date ± Int` soma ou tira dias; `DateTime ± Int`, segundos. `Date - Date` dá dias e `DateTime - DateTime`,
+  segundos. `==`, `!=`, `<`, `>`, `<=` e `>=` valem entre dois do mesmo tipo.
+- **Não se misturam:** comparar ou somar `Date` com `DateTime` é erro (não há conversão em silêncio). Use `dt.date`
+  ou `DateTime.of:d` / `DateTime.end_of:d`. Um intervalo "de X até Y, inclusive" com datas é
+  `DateTime.of:X` até `DateTime.end_of:Y`.
+- **Fuso:** só UTC. `Date.today:` e `DateTime.now:` são o dia e a hora em UTC, que no Brasil à noite já é o dia
+  seguinte. Um deslocamento no texto (`-03:00`) é convertido para UTC na leitura.
+- **Intervalo:** anos 1 a 9999; uma conta que sai disso é erro.
+- **Em actions e rotas:** o corpo JSON e a URL aceitam só o formato ISO (`AAAA-MM-DD`; `AAAA-MM-DDTHH:MM:SSZ`);
+  outro formato ou uma data que não existe dá `422` no campo certo. Veja [Agentes](10-agentes.md).
+
 ## Boosters
 
 | Comando | O que faz |

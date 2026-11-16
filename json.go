@@ -108,6 +108,12 @@ func writeJSON(sb *strings.Builder, v any, indent string, depth, line int) {
 			keys[i] = fmt.Sprint(k)
 		}
 		writeObject(sb, keys, x.Vals, indent, depth, line)
+	case Date:
+		b, _ := json.Marshal(x.String())
+		sb.Write(b)
+	case DateTime:
+		b, _ := json.Marshal(x.String())
+		sb.Write(b)
 	case *Instance:
 		keys := make([]string, len(x.Def.Fields))
 		for i, f := range x.Def.Fields {

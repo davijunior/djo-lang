@@ -535,6 +535,11 @@ func (in *Interp) invoke(fd *FuncDecl, label string, args []Expr, env *Env, self
 func (in *Interp) binary(n *Binary, env *Env) any {
 	l, r := in.eval(n.L, env), in.eval(n.R, env)
 
+	dateMixCheck(l, r, n.Line)
+	if res, ok := dateBinary(n.Op, l, r, n.Line); ok {
+		return res
+	}
+
 	switch n.Op {
 	case Eq:
 		return equal(l, r)
@@ -700,6 +705,10 @@ func typeName(v any) string {
 		return "Arr"
 	case *Map:
 		return "Map"
+	case Date:
+		return "Date"
+	case DateTime:
+		return "DateTime"
 	case nil:
 		return "Nil"
 	}
@@ -716,7 +725,7 @@ func coerce(typ string, v any) (any, bool) {
 			return float64(i), true
 		}
 	}
-	if v == nil && !validTypes[typ] {
+	if v == nil && (!validTypes[typ] || typ == "Date" || typ == "DateTime") {
 		return nil, true // campo do tipo de uma struct pode estar vazio
 	}
 	if inst, ok := v.(*Instance); ok {
@@ -758,6 +767,10 @@ func format(v any) string {
 			}
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
+	case Date:
+		return x.String()
+	case DateTime:
+		return x.String()
 	case float64:
 		s := strconv.FormatFloat(x, 'g', -1, 64)
 		if !strings.ContainsAny(s, ".eIN") {

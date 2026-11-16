@@ -23,7 +23,11 @@ map dados = {"a": 1}         // mapa: o valor precisa ser um mapa
 | `Bool`   | `true`, `false`    |
 | `Arr`    | `[1, "a"]`         |
 | `Map`    | `{"k": 1}`         |
+| `Date`   | `Date.make:2025:1:31` (um dia) |
+| `DateTime` | `DateTime.now:` (um instante, em UTC) |
 | `Any`    | qualquer um        |
+
+`Date` e `DateTime` são tipos de verdade, com contas e comparação; veja [a referência](06-referencia.md#date-e-datetime).
 
 Escapes em strings: `\n`, `\t`, `\"`, `\\`.
 

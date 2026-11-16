@@ -72,7 +72,7 @@ func (in *Interp) parseReturns(line int, ctx string, v any) *retSpec {
 		fail(line, "%s: \"returns\" é o nome de um tipo (\"Post\") ou uma lista com um tipo ([\"Post\"])", ctx)
 	}
 	if name == "Any" || (!validTypes[name] && in.structs[name] == nil) {
-		fail(line, "%s: \"returns\": o tipo '%s' não existe (use Int, Float, String, Bool, Arr, Map ou uma struct do core/)", ctx, name)
+		fail(line, "%s: \"returns\": o tipo '%s' não existe (use Int, Float, String, Bool, Date, DateTime, Arr, Map ou uma struct do core/)", ctx, name)
 	}
 	spec.node = in.buildNode(name, 0)
 	return spec
@@ -92,6 +92,10 @@ func (n *tnode) schema() map[string]any {
 		return map[string]any{"type": "array"}
 	case "Map":
 		return map[string]any{"type": "object"}
+	case "Date":
+		return map[string]any{"type": "string", "format": "date"}
+	case "DateTime":
+		return map[string]any{"type": "string", "format": "date-time"}
 	case "obj":
 		props := map[string]any{}
 		for k, f := range n.fields {
@@ -234,6 +238,18 @@ func conform(v any, n *tnode, path string, errs *[]string) {
 	case "Map":
 		if _, ok := v.(*Map); !ok {
 			bad("Map")
+		}
+	case "Date":
+		if s, isStr := v.(string); v != nil {
+			if _, ok := parseDate(s); !isStr || !ok {
+				bad("Date (AAAA-MM-DD)")
+			}
+		}
+	case "DateTime":
+		if s, isStr := v.(string); v != nil {
+			if _, ok := parseDateTime(s); !isStr || !ok {
+				bad("DateTime (AAAA-MM-DDTHH:MM:SSZ)")
+			}
 		}
 	case "obj":
 		if v == nil || n.open {

@@ -13,7 +13,7 @@ type Parser struct {
 	tpl    bool // lendo um template: blocos só com chaves
 }
 
-var validTypes = map[string]bool{"Map": true, "Int": true, "Float": true, "String": true, "Bool": true, "Arr": true, "Any": true}
+var validTypes = map[string]bool{"Map": true, "Int": true, "Float": true, "String": true, "Bool": true, "Arr": true, "Any": true, "Date": true, "DateTime": true}
 
 // validType: tipos da linguagem ou nome de struct (inicial maiúscula).
 func validType(s string) bool {

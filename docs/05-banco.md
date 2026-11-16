@@ -92,8 +92,15 @@ Isso protege contra SQL injection. Valores aceitos: `Int`, `Float`, `String`, `B
 | NULL             | `nil`     |
 | BLOB             | `String`  |
 
-O SQLite não tem tipo booleano: `true` vira `1` e `false` vira `0`. Guarde datas como `Int`
-(`Time.now:`).
+O SQLite não tem tipo booleano: `true` vira `1` e `false` vira `0`.
+
+**Datas.** Um `Date` ou `DateTime` pode ir como parâmetro (`?`). No SQLite ele é gravado como **texto**:
+`"2025-01-31"` para `Date` e `"2025-01-31 14:05:00"` (UTC, sem fuso) para `DateTime`. Esse texto ordena e
+compara certo (`WHERE dia >= ? AND dia <= ?`, `ORDER BY inicio`), então a coluna pode ser `TEXT`. No
+PostgreSQL e no MySQL o valor vai como `date`/`timestamp` em UTC. Na leitura o `Db` devolve o que a coluna
+guarda (texto no SQLite): converta com `Date.parse:` e `DateTime.parse:`, que aceitam esse formato. Colunas
+`Int` com segundos desde 1970 viram `DateTime` com `DateTime.from_unix:`. Veja
+[Date e DateTime](06-referencia.md#date-e-datetime).
 
 ## Transações
 
@@ -166,3 +173,5 @@ struct Post{
   sistemas pequenos. Para muito acesso de escrita, ou vários servidores no mesmo banco, use o
   PostgreSQL ou o MySQL.
 - Erros de SQL aparecem com `-dev`; sem ele, a página mostra só um erro genérico.
+
+> **Não verificado:** parâmetros `Date`/`DateTime` em PostgreSQL e MySQL (enviados como `time.Time` UTC) ainda não foram testados contra servidores reais; no SQLite vão como texto.

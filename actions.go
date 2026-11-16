@@ -45,6 +45,10 @@ func (in *Interp) schemaOf(typ string, depth int) map[string]any {
 		return map[string]any{"type": "array"}
 	case "Map":
 		return map[string]any{"type": "object"}
+	case "Date":
+		return map[string]any{"type": "string", "format": "date"}
+	case "DateTime":
+		return map[string]any{"type": "string", "format": "date-time"}
 	}
 	sd, ok := in.structs[typ]
 	if !ok || depth > schemaDepth {
@@ -82,7 +86,7 @@ func (in *Interp) checkAction(fd *FuncDecl, line int) {
 		case validTypes[p.Type]:
 		case in.structs[p.Type] != nil:
 		default:
-			fail(line, "a action '%s': o tipo '%s' do parâmetro '%s' não é aceito (use Int, Float, String, Bool, Arr, Map ou uma struct)", fd.Name, p.Type, p.Name)
+			fail(line, "a action '%s': o tipo '%s' do parâmetro '%s' não é aceito (use Int, Float, String, Bool, Date, DateTime, Arr, Map ou uma struct)", fd.Name, p.Type, p.Name)
 		}
 	}
 }
@@ -372,6 +376,24 @@ func (in *Interp) convertIn(typ string, v any, path string, errs inputErrs, dept
 		return bad("Map")
 	case "Any":
 		return v
+	case "Date":
+		if s, ok := v.(string); ok {
+			if d, ok := parseDate(s); ok {
+				return d
+			}
+			errs.add(path, "não é uma data válida; use AAAA-MM-DD, como 2025-01-31")
+			return nil
+		}
+		return bad("Date (texto AAAA-MM-DD)")
+	case "DateTime":
+		if s, ok := v.(string); ok {
+			if t, ok := parseDateTime(s); ok {
+				return t
+			}
+			errs.add(path, "não é uma data e hora válida; use AAAA-MM-DDTHH:MM:SSZ, como 2025-01-31T14:05:00Z")
+			return nil
+		}
+		return bad("DateTime (texto AAAA-MM-DDTHH:MM:SSZ)")
 	}
 	sd := in.structs[typ]
 	m, ok := v.(*Map)
@@ -424,6 +446,16 @@ func fromPath(typ, s string) (any, error) {
 		return strconv.ParseFloat(s, 64)
 	case "Bool":
 		return strconv.ParseBool(s)
+	case "Date":
+		if d, ok := parseDate(s); ok {
+			return d, nil
+		}
+		return nil, errors.New("não é uma data AAAA-MM-DD")
+	case "DateTime":
+		if t, ok := parseDateTime(s); ok {
+			return t, nil
+		}
+		return nil, errors.New("não é uma data e hora AAAA-MM-DDTHH:MM:SSZ")
 	}
 	return nil, errors.New("o tipo " + typ + " não pode vir da URL")
 }

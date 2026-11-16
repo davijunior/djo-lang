@@ -152,7 +152,7 @@ func (in *Interp) zeroValue(f FieldDecl, owner string, line int) any {
 		return &Array{}
 	case "Map":
 		return newMap()
-	case "Any":
+	case "Any", "Date", "DateTime":
 		return nil
 	}
 	if _, ok := in.structs[f.Type]; ok || in.interfaces[f.Type] != nil {
@@ -245,7 +245,11 @@ func lookupMethod(inst *Instance, name string) (*Instance, *FuncDecl, bool) {
 }
 
 func (in *Interp) member(n *Member, env *Env) any {
-	inst := in.instance(in.eval(n.X, env), n.Line, "acessar o campo '"+n.Name+"'")
+	v := in.eval(n.X, env)
+	if r, ok := dateProp(v, n.Name, n.Line); ok {
+		return r
+	}
+	inst := in.instance(v, n.Line, "acessar o campo '"+n.Name+"'")
 	owner, i, ok := lookupField(inst, n.Name)
 	if ok {
 		return owner.Vals[i]
@@ -316,7 +320,11 @@ func (in *Interp) methodCall(n *MethodCall, env *Env) any {
 		}
 		return in.invoke(m, sr.parent.Name+"."+n.Name, n.Args, env, sr.self, n.Line)
 	}
-	inst := in.instance(in.eval(n.X, env), n.Line, "chamar o método '"+n.Name+"'")
+	recv := in.eval(n.X, env)
+	if r, ok := in.dateMethod(recv, n, env); ok {
+		return r
+	}
+	inst := in.instance(recv, n.Line, "chamar o método '"+n.Name+"'")
 	owner, m, ok := lookupMethod(inst, n.Name)
 	if !ok {
 		if _, _, isField := lookupField(inst, n.Name); isField {

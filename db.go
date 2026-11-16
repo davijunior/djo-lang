@@ -94,6 +94,36 @@ func (in *Interp) closeTx() {
 	}
 }
 
+// dbDate converte Date e DateTime para o que o banco recebe. No SQLite vão como texto, que
+// ordena e compara certo: "2025-01-31" e "2025-01-31 14:05:00" (o formato de banco, em UTC). No
+// PostgreSQL e no MySQL vão como time.Time em UTC, para as colunas DATE e TIMESTAMP.
+// dbDateFor converte Date/DateTime para o que o banco recebe (veja Interp.dbDate).
+func dbDateFor(kind string, v any) any {
+	remote := kind != kindSQLite
+	switch x := v.(type) {
+	case Date:
+		if remote {
+			return x.time()
+		}
+		return x.String()
+	case DateTime:
+		if remote {
+			return x.time()
+		}
+		return x.time().Format(sqlDateTime)
+	}
+	return v
+}
+
+func (in *Interp) dbDate(v any) any { return dbDateFor(in.dbs.kind, v) }
+
+func (in *Interp) dbArgs(params []any) []any {
+	for i, v := range params {
+		params[i] = in.dbDate(v)
+	}
+	return params
+}
+
 func dbParams(a []any, i int, fn string, line int) []any {
 	if len(a) <= i {
 		return nil
@@ -105,7 +135,7 @@ func dbParams(a []any, i int, fn string, line int) []any {
 	out := make([]any, len(arr.Items))
 	for j, v := range arr.Items {
 		switch x := v.(type) {
-		case nil, int64, float64, string, bool:
+		case nil, int64, float64, string, bool, Date, DateTime:
 			out[j] = x
 		default:
 			fail(line, "%s: parâmetro %d: %s não pode ir para o banco", fn, j+1, typeName(v))
@@ -140,7 +170,7 @@ func dbValue(v any) any {
 }
 
 func (in *Interp) dbRows(a []any, fn string, line int, limit int) []*Map {
-	q, params := dbSQL(a, fn, line), dbParams(a, 1, fn, line)
+	q, params := dbSQL(a, fn, line), in.dbArgs(dbParams(a, 1, fn, line))
 	ctx, cancel := context.WithTimeout(context.Background(), dbQueryLimit)
 	defer cancel()
 	rows, err := in.runner(fn, line).QueryContext(ctx, in.sqlFor(q), params...)
@@ -209,7 +239,7 @@ func init() {
 			return nil
 		}},
 		"exec": {-1, func(in *Interp, env *Env, line int, a []any) any {
-			q, params := dbSQL(a, "Db.exec", line), dbParams(a, 1, "Db.exec", line)
+			q, params := dbSQL(a, "Db.exec", line), in.dbArgs(dbParams(a, 1, "Db.exec", line))
 			ctx, cancel := context.WithTimeout(context.Background(), dbQueryLimit)
 			defer cancel()
 			res, err := in.runner("Db.exec", line).ExecContext(ctx, in.sqlFor(q), params...)

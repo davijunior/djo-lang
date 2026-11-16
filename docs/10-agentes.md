@@ -33,7 +33,7 @@ action criar_post
 - `action` se escreve como `f`, e **também continua sendo uma função**: `criar_post:"Oi":4.5:autor` funciona em
   qualquer página. A tela e o agente usam a mesma validação e a mesma regra de negócio.
 - A linha entre aspas, logo depois do nome, é a descrição (vai para o manifesto).
-- **Todo parâmetro precisa de tipo**: `Int`, `Float`, `String`, `Bool`, `Arr`, `Map` ou uma `struct`. É o que
+- **Todo parâmetro precisa de tipo**: `Int`, `Float`, `String`, `Bool`, `Date`, `DateTime`, `Arr`, `Map` ou uma `struct`. `Date` e `DateTime` chegam como texto ISO e entram no manifesto como `string` com `format` `date` e `date-time`. É o que
   permite descrever a entrada com exatidão.
 - Declare-a no `core/`, como as outras funções.
 
@@ -283,6 +283,6 @@ djo agent -raw localhost:8080                # o JSON do manifesto, sem formatar
 - Os parâmetros de uma action não têm valor padrão (só os campos de struct).
 - Os limites e o cache vivem na memória de **um processo**. Com várias instâncias atrás de um balanceador, cada uma
   tem os seus.
-- Não há ainda paginação padrão nem formato compacto para listas.
+- Para listas grandes use `Db.page:` (paginação) e `?tabela` (CSV compacto); veja [Banco de dados](05-banco.md).
 
 Exemplo completo: `exemplos/rotas/` (tela, agente e a action `comentar`).
