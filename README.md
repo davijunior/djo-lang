@@ -98,4 +98,4 @@ go vet ./... && go test ./...
 
 ## Licença
 
-[MIT](LICENSE): use, modifique e distribua à vontade, inclusive em projetos comerciais, mantendo o aviso de copyright.
+[Apache License 2.0](LICENSE): use, modifique e distribua à vontade, inclusive em projetos comerciais, mantendo os avisos (`LICENSE`, `NOTICE`; as licenças das bibliotecas que o binário leva estão em `THIRD_PARTY_LICENSES`). As versões até a v0.6.0 foram publicadas sob a licença MIT.

@@ -1,0 +1,10 @@
+djo
+Copyright 2026 davijunior
+
+Este produto inclui o djo, uma linguagem de programação escrita em Go.
+This product includes djo, a programming language written in Go.
+
+Nenhuma das bibliotecas que o djo usa traz um arquivo NOTICE próprio (Apache 2.0, seção 4(d)).
+As licenças delas (BSD, MIT e MPL 2.0) estão em THIRD_PARTY_LICENSES.
+None of the libraries djo uses ships its own NOTICE file (Apache 2.0, section 4(d)).
+Their licenses (BSD, MIT and MPL 2.0) are in THIRD_PARTY_LICENSES.

@@ -4,7 +4,7 @@
 #   ./release.sh v0.1.0              tudo: desktop (full) + placas (tiny e nano)
 #   ./release.sh v0.1.0 --quick      só linux/amd64 (para testar o processo)
 #
-# Cada arquivo contém o binário "djo" + README.md + docs/ + exemplos/.
+# Cada arquivo contém o binário "djo" + README.md + LICENSE + NOTICE + THIRD_PARTY_LICENSES + docs/ + exemplos/.
 # No fim saem o SHA256SUMS e o install.sh, que são o que o usuário baixa.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -44,7 +44,7 @@ pack() { # perfil os arch rótulo-da-arch [env...]
   mkdir -p "$dir"
   env CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" "$@" \
     go build -trimpath -ldflags "-s -w -X main.version=$version" -tags "$(tags_for "$p")" -o "$dir/$bin" .
-  cp README.md "$dir/"
+  cp README.md LICENSE NOTICE THIRD_PARTY_LICENSES "$dir/"
   cp -r docs exemplos "$dir/"
   # sobras de quando os exemplos foram rodados: não fazem parte do release
   find "$dir/exemplos" \( -name _saida -o -name _dados \) -prune -exec rm -rf {} +
