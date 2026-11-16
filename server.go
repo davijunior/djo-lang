@@ -50,6 +50,7 @@ type Server struct {
 	lane         *lane // limites do tráfego de agentes
 	rcache       respCache
 	askx         askState
+	dbRoot       string // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
 }
 
 func NewServer(dir string, dev bool) (*Server, error) {
@@ -104,6 +105,9 @@ func hidden(urlPath string) bool {
 	}
 	if strings.EqualFold(urlPath, "/ask.djo") {
 		return true // a política do /ask nunca é servida
+	}
+	if urlPath == "/spec" || strings.HasPrefix(urlPath, "/spec/") {
+		return true // os testes (djo spec) nunca são servidos
 	}
 	if urlPath == "/core" || strings.HasPrefix(urlPath, "/core/") || urlPath == "/boosters" || strings.HasPrefix(urlPath, "/boosters/") {
 		return true // o core do sistema e os boosters nunca são servidos
@@ -253,6 +257,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 	in := NewInterp(out)
 	in.stdin = bufio.NewReader(strings.NewReader(""))
 	in.root = s.root
+	in.dbRoot = s.dbRoot
 	in.req = r
 	in.params = params
 	in.resp = &response{status: status, header: http.Header{}}

@@ -10,6 +10,8 @@ type dbState struct{}
 
 func (in *Interp) closeTx() {}
 
+func dbCloseUnder(dir string) {}
+
 func init() {
 	off := builtin{-1, func(in *Interp, env *Env, line int, a []any) any {
 		fail(line, "Db não está incluído neste build (compilado com -tags nodb)")

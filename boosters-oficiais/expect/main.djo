@@ -1,0 +1,185 @@
+// API do booster expect: matchers para o djo spec. Cada um confere o valor e, se não bater, chama
+// Spec.fail (o spec para ali e o relatório mostra esperado e recebido). O trabalho fica em core/.
+
+// eq: igualdade funda (listas, mapas, Date, DateTime, structs)
+f eq
+    params[real, esperado]
+    if
+        cond[not (igual:real:esperado)]
+        falhou:(tr:"os valores são diferentes":"the values differ"):(mostra:esperado):(mostra:real)
+
+f not_eq
+    params[real, esperado]
+    if
+        cond[igual:real:esperado]
+        falhou:(tr:"os valores deviam ser diferentes":"the values should differ"):("≠ " + (mostra:esperado)):(mostra:real)
+
+f be_nil
+    params[real]
+    if
+        cond[not (is:real:"Nil")]
+        falhou:(tr:"esperava nil":"expected nil"):"nil":(mostra:real)
+
+f be_true
+    params[real]
+    if
+        cond[not ((is:real:"Bool") and real)]
+        falhou:(tr:"esperava true":"expected true"):"true":(mostra:real)
+
+f be_false
+    params[real]
+    if
+        cond[not ((is:real:"Bool") and (not real))]
+        falhou:(tr:"esperava false":"expected false"):"false":(mostra:real)
+
+// include: texto contém texto, lista contém item, mapa tem a chave
+f include
+    params[colecao, item]
+    var achou = false
+    if
+        cond[is:colecao:"String"]
+        if
+            cond[not (is:item:"String")]
+            falhou_msg:(tr:"com um texto, include espera outro texto":"with a string, include expects another string")
+        achou = contains:colecao:item
+    elif
+        cond[is:colecao:"Arr"]
+        for{
+            each[x in colecao]
+            if
+                cond[igual:x:item]
+                achou = true
+        }
+    elif
+        cond[is:colecao:"Map"]
+        achou = has:colecao:item
+    else
+        falhou_msg:((tr:"include espera texto, lista ou mapa, mas veio ":"include expects a string, list or map, got ") + (mostra:colecao))
+    if
+        cond[not achou]
+        falhou:(tr:"não inclui o item":"does not include the item"):((tr:"incluir ":"include ") + (mostra:item)):(mostra:colecao)
+
+f gt
+    params[real, ref]
+    numero:real:"gt"
+    numero:ref:"gt"
+    if
+        cond[not (real > ref)]
+        falhou:(tr:"esperava maior":"expected greater"):("> " + (mostra:ref)):(mostra:real)
+
+f gte
+    params[real, ref]
+    numero:real:"gte"
+    numero:ref:"gte"
+    if
+        cond[not (real >= ref)]
+        falhou:(tr:"esperava maior ou igual":"expected greater or equal"):(">= " + (mostra:ref)):(mostra:real)
+
+f lt
+    params[real, ref]
+    numero:real:"lt"
+    numero:ref:"lt"
+    if
+        cond[not (real < ref)]
+        falhou:(tr:"esperava menor":"expected less"):("< " + (mostra:ref)):(mostra:real)
+
+f lte
+    params[real, ref]
+    numero:real:"lte"
+    numero:ref:"lte"
+    if
+        cond[not (real <= ref)]
+        falhou:(tr:"esperava menor ou igual":"expected less or equal"):("<= " + (mostra:ref)):(mostra:real)
+
+// close: número perto do esperado, com tolerância
+f close
+    params[real, esperado, tolerancia]
+    numero:real:"close"
+    numero:esperado:"close"
+    numero:tolerancia:"close"
+    if
+        cond[(abs:(real - esperado)) > tolerancia]
+        falhou:(tr:"fora da tolerância":"outside the tolerance"):((mostra:esperado) + " ± " + (mostra:tolerancia)):(mostra:real)
+
+// len: tamanho de lista, mapa ou texto
+f len
+    params[colecao, n]
+    if
+        cond[not ((is:colecao:"Arr") or (is:colecao:"Map") or (is:colecao:"String"))]
+        falhou_msg:((tr:"len espera lista, mapa ou texto, mas veio ":"len expects a list, map or string, got ") + (mostra:colecao))
+    var tam = contar:colecao
+    if
+        cond[tam != n]
+        falhou:(tr:"tamanho diferente":"different length"):(str:n):(str:tam)
+
+f empty
+    params[colecao]
+    if
+        cond[not ((is:colecao:"Arr") or (is:colecao:"Map") or (is:colecao:"String"))]
+        falhou_msg:((tr:"empty espera lista, mapa ou texto, mas veio ":"empty expects a list, map or string, got ") + (mostra:colecao))
+    if
+        cond[(contar:colecao) > 0]
+        falhou:(tr:"esperava vazio":"expected empty"):(tr:"vazio":"empty"):(mostra:colecao)
+
+f starts
+    params[texto, prefixo]
+    textos:texto:prefixo:"starts"
+    if
+        cond[(slice:texto:0:(contar:prefixo)) != prefixo]
+        falhou:(tr:"não começa com o prefixo":"does not start with the prefix"):(mostra:prefixo):(mostra:texto)
+
+f ends
+    params[texto, sufixo]
+    textos:texto:sufixo:"ends"
+    var de = (contar:texto) - (contar:sufixo)
+    if
+        cond[(de < 0) or ((slice:texto:de:(contar:texto)) != sufixo)]
+        falhou:(tr:"não termina com o sufixo":"does not end with the suffix"):(mostra:sufixo):(mostra:texto)
+
+// raises: chama a função do projeto e espera um erro de execução (com o trecho na mensagem; "" aceita qualquer)
+f raises
+    params[funcao, args, trecho]
+    var r = Spec.try:funcao:args
+    if
+        cond[r["ok"]]
+        falhou:(tr:"esperava um erro, mas a função terminou bem":"expected an error, but the function finished fine"):(tr:"erro":"error"):(mostra:r["value"])
+    if
+        cond[(trecho != "") and (not (contains:(r["error"]):trecho))]
+        falhou:(tr:"o erro não tem o trecho esperado":"the error lacks the expected text"):(mostra:trecho):(mostra:r["error"])
+
+// status: o código da resposta de Spec.get/post/...
+f status
+    params[resposta, codigo]
+    resposta_ok:resposta
+    if
+        cond[resposta["status"] != codigo]
+        falhou:(tr:"código HTTP diferente":"different HTTP status"):(str:codigo):((str:resposta["status"]) + " " + (corpo_curto:resposta))
+
+// json: valor no corpo JSON da resposta, pelo caminho "a.b.0.c"
+f json
+    params[resposta, caminho, esperado]
+    resposta_ok:resposta
+    var doc = Json.decode:resposta["body"]
+    if
+        cond[is:doc:"Nil"]
+        falhou:(tr:"o corpo da resposta não é JSON":"the response body is not JSON"):"JSON":(corpo_curto:resposta)
+    var atual = doc
+    for{
+        each[seg in split:caminho:"."]
+        if
+            cond[is:atual:"Map"]
+            atual = atual[seg]
+        elif
+            cond[(is:atual:"Arr") and (not (is:(int:seg):"Nil"))]
+            var i = int:seg
+            if
+                cond[(i >= 0) and (i < (contar:atual))]
+                atual = atual[i]
+            else
+                atual = nil
+        else
+            atual = nil
+    }
+    if
+        cond[not (igual:atual:esperado)]
+        falhou:((tr:"valor diferente em ":"different value at ") + caminho):(mostra:esperado):(mostra:atual)

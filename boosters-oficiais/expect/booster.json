@@ -1,0 +1,6 @@
+{
+  "nome": "expect",
+  "versao": "1.0.0",
+  "descricao": "Matchers para o djo spec: expect.eq, include, gt, raises, status, json e outros, com mensagens em português ou inglês.",
+  "permissoes": ["Spec"]
+}

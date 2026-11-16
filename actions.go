@@ -491,6 +491,7 @@ func (s *Server) runAction(w http.ResponseWriter, r *http.Request, t *routeTable
 	in := NewInterp(out)
 	in.stdin = bufio.NewReader(strings.NewReader(""))
 	in.root = s.root
+	in.dbRoot = s.dbRoot
 	in.req = r
 	in.params = pathVals
 	in.resp = &response{status: http.StatusOK, header: http.Header{}}

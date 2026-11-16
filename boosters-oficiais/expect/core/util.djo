@@ -1,0 +1,125 @@
+// Utilidades internas do expect: contagem, comparação funda e texto das mensagens.
+
+// tr devolve o texto na língua do relatório (pt por padrão, en com --lang en).
+f tr
+    params[pt, en]
+    if
+        cond[(Spec.lang:) == "en"]
+        return en
+    return pt
+
+// contar conta os itens de uma lista, de um mapa ou as letras de um texto.
+f contar
+    params[x]
+    var n = 0
+    for{
+        each[item in x]
+        n++
+    }
+    return n
+
+f primitivo
+    params[x]
+    return (is:x:"String") or (is:x:"Int") or (is:x:"Float") or (is:x:"Bool") or (is:x:"Nil")
+
+// igual compara em profundidade: lista com lista, mapa com mapa (sem olhar a ordem das chaves),
+// Date com Date, DateTime com DateTime, e struct pelo texto de seus campos.
+f igual
+    params[a, b]
+    if
+        cond[is:a:"Arr"]
+        if
+            cond[not (is:b:"Arr")]
+            return false
+        var n = contar:a
+        if
+            cond[n != (contar:b)]
+            return false
+        for{
+            each[i in range:0:n]
+            if
+                cond[not (igual:a[i]:b[i])]
+                return false
+        }
+        return true
+    if
+        cond[is:a:"Map"]
+        if
+            cond[not (is:b:"Map")]
+            return false
+        if
+            cond[(contar:a) != (contar:b)]
+            return false
+        for{
+            each[k in a]
+            if
+                cond[not (has:b:k)]
+                return false
+            if
+                cond[not (igual:a[k]:b[k])]
+                return false
+        }
+        return true
+    if
+        cond[is:a:"Date"]
+        return (is:b:"Date") and (a == b)
+    if
+        cond[is:a:"DateTime"]
+        return (is:b:"DateTime") and (a == b)
+    if
+        cond[(is:b:"Arr") or (is:b:"Map") or (is:b:"Date") or (is:b:"DateTime")]
+        return false
+    if
+        cond[(primitivo:a) and (primitivo:b)]
+        if
+            cond[((is:a:"Int") or (is:a:"Float")) != ((is:b:"Int") or (is:b:"Float"))]
+            return false
+        return a == b
+    return (str:a) == (str:b)
+
+// mostra escreve um valor para a mensagem: texto entre aspas, listas e mapas em JSON.
+f mostra
+    params[v]
+    if
+        cond[is:v:"Nil"]
+        return "nil"
+    if
+        cond[(is:v:"String") or (is:v:"Arr") or (is:v:"Map")]
+        return Json.encode:v
+    return str:v
+
+f falhou
+    params[msg, esperado, recebido]
+    Spec.fail:{"mensagem": msg, "esperado": esperado, "recebido": recebido}
+
+f falhou_msg
+    params[msg]
+    Spec.fail:{"mensagem": msg}
+
+// numero confere que o valor é Int ou Float antes de comparar.
+f numero
+    params[v, nome]
+    if
+        cond[not ((is:v:"Int") or (is:v:"Float"))]
+        falhou_msg:(tr:("esperava um número em " + nome + ", mas veio " + (mostra:v)):("expected a number in " + nome + ", got " + (mostra:v)))
+
+f textos
+    params[a, b, nome]
+    if
+        cond[not ((is:a:"String") and (is:b:"String"))]
+        falhou_msg:(tr:(nome + " espera dois textos"):(nome + " expects two strings"))
+
+f resposta_ok
+    params[r]
+    if
+        cond[not ((is:r:"Map") and (has:r:"status") and (has:r:"body"))]
+        falhou_msg:(tr:"esperava a resposta de Spec.get/post/put/patch/delete":"expected the response of Spec.get/post/put/patch/delete")
+
+// corpo_curto mostra o começo do corpo da resposta, para a mensagem.
+f corpo_curto
+    params[r]
+    var b = r["body"]
+    if
+        cond[(contar:b) > 160]
+        return mostra:((slice:b:0:160) + "…")
+    return mostra:b

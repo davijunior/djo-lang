@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Env struct {
@@ -76,7 +77,13 @@ type Interp struct {
 	dbs             dbState
 	ask             *askConfig          // só enquanto o ask.djo é lido
 	boosters        map[string]*booster // boosters/ do projeto, pelo nome
-	cur             *booster            // booster em execução (nil: core ou página)
+	dbRoot          string              // pasta dos bancos SQLite (vazio: a pasta do site); o djo spec usa uma temporária
+	deadline        time.Time           // limite de tempo da execução (o djo spec); zero = sem limite
+	spec            *specCtx            // só existe sob "djo spec"
+	outerLine       int                 // linha, no código do projeto, da última chamada a um booster
+	pStructs        map[string]*StructDecl
+	pIfaces         map[string]*InterfaceDecl
+	cur             *booster // booster em execução (nil: core ou página)
 }
 
 const maxDepth = 2000
@@ -127,7 +134,13 @@ func (in *Interp) execBlock(stmts []Stmt, env *Env) (any, bool) {
 func (in *Interp) tick() {
 	in.steps++
 	if in.maxSteps > 0 && in.steps > in.maxSteps {
+		if in.spec != nil {
+			fail(0, "o spec passou do limite de passos (um laço sem fim?) e foi interrompido")
+		}
 		fail(0, "a página demorou demais e foi interrompida (limite de passos)")
+	}
+	if in.steps&0x3ff == 0 && !in.deadline.IsZero() && time.Now().After(in.deadline) {
+		fail(0, "o spec demorou demais e foi interrompido (limite de tempo)")
 	}
 }
 
@@ -526,6 +539,9 @@ func (in *Interp) invoke(fd *FuncDecl, label string, args []Expr, env *Env, self
 	}
 	if fd.Booster != nil { // os argumentos já foram avaliados fora do booster
 		prev, prevS, prevI := in.cur, in.structs, in.interfaces
+		if prev == nil { // vindo do projeto: guarda a linha e o mundo do projeto (o Spec.try volta para ele)
+			in.outerLine, in.pStructs, in.pIfaces = line, prevS, prevI
+		}
 		in.cur, in.structs, in.interfaces = fd.Booster, fd.Booster.structs, fd.Booster.interfaces
 		defer func() { in.cur, in.structs, in.interfaces = prev, prevS, prevI }()
 	}

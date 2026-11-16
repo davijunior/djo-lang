@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +55,18 @@ func openDB(path string) (*sql.DB, error) {
 	}
 	dbConns[path] = db
 	return db, nil
+}
+
+// dbCloseUnder fecha as conexões abertas dentro de dir (o djo spec apaga a pasta depois).
+func dbCloseUnder(dir string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	for p, db := range dbConns {
+		if strings.HasPrefix(p, dir+string(os.PathSeparator)) {
+			db.Close()
+			delete(dbConns, p)
+		}
+	}
 }
 
 // dbState é o banco aberto pela página atual.
@@ -226,7 +239,7 @@ func init() {
 			if strings.Contains(name, "..") || strings.HasPrefix(name, "/") {
 				fail(line, "Db.open: o caminho precisa ficar dentro da pasta do site")
 			}
-			path, err := safeJoinNew(in.root, name)
+			path, err := safeJoinNew(in.dbBase(), name)
 			if err != nil {
 				fail(line, "Db.open '%s': %v", name, err)
 			}
