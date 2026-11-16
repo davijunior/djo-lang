@@ -232,11 +232,11 @@ Guia completo: `docs/ask.md`.
 | Chamada | O que faz |
 |---|---|
 | `Ask.db:"site.db"` | **Obrigatório.** O banco consultado: arquivo `.db`/`.sqlite` do site ou `postgres://` / `mysql://` |
-| `Ask.type:"post":{...}` | Um tipo consultável: `table`, `struct`, `fields` (cada campo com `column`, `kind`, `attr`, `as`, `main`...) |
+| `Ask.type:"post":{...}` | Um tipo consultável: `table`, `struct`, `show_by`, `fields` (cada campo com `column`, `kind`, `attr`, `as`, `main`, `detail`...) |
 | `Ask.level:"public":{"allow": [...]}` | O que cada nível enxerga (`public < agent < admin`): `type`, `where` fixo, `fields` |
 | `Ask.deny:["user.password"]` | Campos que ninguém enxerga, em nenhuma operação |
 | `Ask.alias:"post":["artigos"]` | Apelidos de tipo (`"post"`) ou de campo (`"post.title"`), em minúsculas |
-| `Ask.limits:{...}` | `max_results` (1–1000), `per_minute` por IP e por token, `global_per_minute` (teto global opcional), `timeout_ms` (100–10000) |
+| `Ask.limits:{...}` | `max_results` (1–1000), `per_minute` por IP e por token, `global_per_minute` (teto global opcional), `timeout_ms` (100–10000), `detail_max_bytes` (1024–500000, padrão 200 KB) |
 | `Ask.reply:{"refused": ..., "unknown": ...}` | Mensagens de "não aceito" e "não entendi", um texto ou `{"en": ..., "pt": ...}` |
 | `Ask.level_from:"nivel_do_pedido"` | Função do `core/` (sem parâmetros, não action) que devolve `"public"`, `"agent"` ou `"admin"`; lê o pedido com `Http.bearer:` ou a sessão. Sem ela tudo é `public` e tokens dão 401 |
 | `Ask.proxy:["127.0.0.1", "10.0.0.0/8"]` | Proxies de confiança. Só quando a conexão vem de um deles o `X-Forwarded-For` é lido (usa o último IP não confiável da cadeia) |
@@ -268,6 +268,8 @@ Códigos de saída: 0 ok · 1 uso · 2 rede ou servidor · 3 recusado, não ente
 Palavras de ligação (`o a que tenha tem the which has...`) são ignoradas entre as condições; `e`/`and`/`,` ligam condições (só
 E). Tag: `tem a tag X`, `com a tag X`, `marcados com X`, `tagged X`, `has the tag X`. Texto: `titulo contem|contendo|comeca com|igual a X`.
 Recusado de propósito, com o motivo (kind `unsupported`, 422): OU/or, negação, mês por extenso e datas relativas.
+
+**Texto longo (`detail`) e um item só.** Um campo `{"kind": "text", "detail": true}` (o corpo de um post, por exemplo) **nunca sai em lista, em contagem nem no JSON `data`**; continua valendo em filtro (`posts com texto contendo "go"`) se o nível o enxerga. Ele só vem quando a pessoa pede **um item**: o tipo declara `"show_by": ["slug", "title"]` (até 4 campos text ou enum, na ordem) e a frase é `mostre o post "bem-vindo"`, `show post "welcome"`, `show me the post bem-vindo` ou `o post bem-vindo` (tipo no singular, sem cláusulas depois). Um achado = todos os campos que o nível enxerga, com o texto longo (`item` e `detail_fields` na resposta); vários = uma lista curta sem o texto longo, pedindo para ser mais específico; nenhum = "não encontrei", **igual** para um item que o nível não enxerga (`where`) e para um que não existe. O `detail` só aparece se estiver na lista `fields` do nível e não estiver em `Ask.deny`. O texto devolvido é cortado em `detail_max_bytes` (`"truncated": true`). No `djo ask` o item sai como `campo: valor`, com o texto longo por último; na página `/ask` ele vai em `<pre>` escapado (nada de Markdown nem HTML).
 
 **Aliases em português.** Nomes de campo e de tipo vêm do `ask.djo` (`Ask.alias:"post.title":["titulo"]`). Para nomes comuns de
 **campo** o djo já entende um apelido padrão (`title`=titulo, `text`=texto, `body`=corpo/conteudo, `tags`=etiquetas, `status`=situacao,

@@ -457,6 +457,7 @@ type askP struct {
 	toks []askTok
 	i    int
 	typ  string
+	typW string // o tipo como a pessoa o escreveu, quando está no plural
 	fm   map[string]string
 	view *askView
 	plan askPlan
@@ -513,9 +514,44 @@ func (p *askP) cur() (askTok, bool) {
 
 func (p *askP) exampleType() string {
 	if len(p.voc.names) > 0 {
-		return p.voc.names[0] + "s"
+		return p.typeLabel(p.voc.names[0])
 	}
 	return "items"
+}
+
+// typeLabel é como o tipo aparece em exemplos e sugestões: em português, o primeiro apelido
+// declarado no plural (termina em "s"), senão o nome do tipo no plural; em inglês, o nome no plural.
+func (p *askP) typeLabel(name string) string {
+	if p.typW != "" && name == p.typ {
+		return p.typW
+	}
+	if p.lang == "pt" {
+		for _, a := range p.voc.c.types[name].aliases {
+			if strings.HasSuffix(a, "s") && a != name+"s" {
+				return strings.ReplaceAll(a, "_", " ")
+			}
+		}
+	}
+	return name + "s"
+}
+
+// singularAlias diz se a frase do tipo é um apelido no singular (não termina em "s") que só este tipo usa.
+func (p *askP) singularAlias(phrase string) bool {
+	if phrase == "" || strings.HasSuffix(phrase, "s") {
+		return false
+	}
+	owner := ""
+	for _, n := range p.voc.names {
+		for _, a := range p.voc.c.types[n].aliases {
+			if strings.Join(strings.Fields(askNorm(strings.ReplaceAll(a, "_", " "))), " ") == phrase {
+				if owner != "" && owner != n {
+					return false
+				}
+				owner = n
+			}
+		}
+	}
+	return owner == p.typ
 }
 
 // notUnderstood é a resposta única para tudo que não existe OU que o nível não enxerga.
@@ -697,6 +733,19 @@ func (c *askConfig) parsePhraseLang(level, phrase, hint string) (*askParsed, err
 	}
 	p.i += n
 	p.typ, p.fm, p.view = tn, voc.fields[tn], c.view(level, tn)
+	if w := toks[p.i-n : p.i]; len(w) > 0 {
+		var ws []string
+		for _, tk := range w {
+			ws = append(ws, tk.text)
+		}
+		if j := strings.Join(ws, " "); strings.HasSuffix(j, "s") && !w[0].quoted {
+			var rs []string
+			for _, tk := range w {
+				rs = append(rs, strings.ToLower(tk.raw))
+			}
+			p.typW = strings.Join(rs, " ")
+		}
+	}
 	if p.view == nil {
 		return nil, p.notUnderstood()
 	}
@@ -708,10 +757,70 @@ func (c *askConfig) parsePhraseLang(level, phrase, hint string) (*askParsed, err
 		}
 		p.plan.Order = &askOrder{m, preOrder == "newest"}
 	}
+	// "mostre o post X", "show post \"X\"": um item específico (o texto longo só vem assim)
+	if kind != "count" && pre.Limit == 0 && preOrder == "" {
+		if v, ok := p.showValue(toks[p.i-n : p.i]); ok {
+			p.plan = askPlan{Type: tn, Show: true, ShowValue: v}
+			p.i = len(toks)
+			return &askParsed{Lang: p.lang, Plan: p.plan}, nil
+		}
+	}
 	if err := p.clauses(); err != nil {
 		return nil, p.decorate(err)
 	}
 	return &askParsed{Lang: p.lang, Plan: p.plan}, nil
+}
+
+// showValue diz se o que sobra depois do tipo é o nome de UM item ("show post welcome", "mostre o post \"bem-vindo\""):
+// o tipo precisa ter show_by que o nível enxergue e vir no singular, e o resto não pode ser uma cláusula.
+// Entre aspas, qualquer texto; sem aspas, só se o tipo foi escrito no singular e as palavras não são do vocabulário do site.
+func (p *askP) showValue(typToks []askTok) (string, bool) {
+	t := p.voc.c.types[p.typ]
+	capable := false
+	for _, f := range t.showBy {
+		capable = capable || p.view.has(f)
+	}
+	if !capable || p.i >= len(p.toks) {
+		return "", false
+	}
+	var words []string
+	for _, tk := range typToks {
+		words = append(words, tk.text)
+	}
+	phrase := strings.Join(words, " ")
+	base := askNorm(strings.ReplaceAll(p.typ, "_", " "))
+	if phrase == base+"s" {
+		return "", false // "show posts X" é lista
+	}
+	singular := phrase == base || p.singularAlias(phrase)
+	rest := p.toks[p.i:]
+	if rest[0].quoted {
+		if len(rest) != 1 || rest[0].raw == "" || len(rest[0].raw) > 200 {
+			return "", false
+		}
+		return rest[0].raw, true
+	}
+	if !singular || !p.bareOK(rest[0]) || len(rest) > 12 {
+		return "", false
+	}
+	if _, n := askMatchKW(p.lx.clauses, p.toks, p.i); n > 0 {
+		return "", false
+	}
+	if _, n := askMatchKW(p.lx.ops, p.toks, p.i); n > 0 {
+		return "", false
+	}
+	var parts []string
+	for _, tk := range rest {
+		if tk.quoted || tk.text == "," || tk.raw == "" {
+			return "", false
+		}
+		parts = append(parts, tk.raw)
+	}
+	v := strings.Join(parts, " ")
+	if len(v) > 200 {
+		return "", false
+	}
+	return v, true
 }
 
 // askVerbless aceita frases sem verbo quando não há dúvida do idioma: começam por "first N"/"primeiros N"
@@ -730,6 +839,18 @@ func askVerbless(toks []askTok, voc *askVocab) *askLex {
 	}
 	if _, n := askLongest(voc.types, toks, 0); n > 0 {
 		starts = true
+	}
+	// "o post X", "the post X": artigos antes do tipo também valem
+	if !starts {
+		i := 0
+		for i < len(toks) && !toks[i].quoted && askFillerAny(toks[i]) {
+			i++
+		}
+		if i > 0 && i < len(toks) {
+			if _, n := askLongest(voc.types, toks, i); n > 0 {
+				starts = true
+			}
+		}
 	}
 	if !starts {
 		return nil
@@ -1369,7 +1490,7 @@ func (p *askP) understood() string {
 	if len(out) == 0 && !pl.CountOnly {
 		return ""
 	}
-	head := p.typ + "s"
+	head := p.typeLabel(p.typ)
 	if pl.CountOnly {
 		head = map[string]string{"en": "count of ", "pt": "contagem de "}[p.lang] + head
 	}
@@ -1441,7 +1562,7 @@ func (p *askP) example() string {
 		ctx = p.guessCtx()
 	}
 	pt := p.lang == "pt"
-	t := p.typ + "s"
+	t := p.typeLabel(p.typ)
 	pick := func(en, ptT string, args ...string) string {
 		f := en
 		if pt {
@@ -1529,4 +1650,14 @@ func (p *askP) decorate(err error) error {
 	}
 	parts = append(parts, p.msg("try", p.example()))
 	return askErr{Kind: e.Kind, Lang: e.Lang, Msg: strings.Join(parts, " ")}
+}
+
+// askFillerAny: palavra de enchimento ou ligação de qualquer idioma ("o", "the"...).
+func askFillerAny(t askTok) bool {
+	for _, lx := range askLexicons {
+		if askIn(lx.fillers, t) || askIn(lx.glue, t) {
+			return true
+		}
+	}
+	return false
 }

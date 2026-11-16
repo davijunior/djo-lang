@@ -425,6 +425,11 @@ func askPrintAnswer(out io.Writer, data []byte) {
 	if a := str("answer"); a != "" {
 		fmt.Fprintln(out, askSafe(a))
 	}
+	if raw, ok := top["item"]; ok && string(raw) != "null" {
+		if o, ok := askDecodeOrdered(raw); ok {
+			askPrintItem(out, o, top)
+		}
+	}
 	var items []json.RawMessage
 	if json.Unmarshal(top["data"], &items) == nil && len(items) > 0 {
 		var rows []*askOrdered
@@ -497,5 +502,31 @@ func askCLITable(out io.Writer, cols []string, rows []*askOrdered) {
 			line = append(line, pad(s, w[i]))
 		}
 		fmt.Fprintln(out, strings.TrimRight(strings.Join(line, "  "), " "))
+	}
+}
+
+// askPrintItem escreve UM item como "campo: valor", com o texto longo (detail) por último, em bloco.
+func askPrintItem(out io.Writer, o *askOrdered, top map[string]json.RawMessage) {
+	var df []string
+	json.Unmarshal(top["detail_fields"], &df)
+	long := map[string]bool{}
+	for _, f := range df {
+		long[f] = true
+	}
+	fmt.Fprintln(out)
+	for _, k := range o.keys {
+		if !long[k] {
+			fmt.Fprintf(out, "%s: %s\n", askSafe(k), askSafe(askCellText(o.vals[k])))
+		}
+	}
+	for _, k := range o.keys {
+		if long[k] {
+			fmt.Fprintf(out, "\n%s:\n%s\n", askSafe(k), strings.TrimRight(askSafe(askCellText(o.vals[k])), "\n"))
+		}
+	}
+	var cut bool
+	json.Unmarshal(top["truncated"], &cut)
+	if cut {
+		fmt.Fprintln(out, "\n(texto cortado no limite de tamanho do servidor)")
 	}
 }

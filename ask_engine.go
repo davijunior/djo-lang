@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // O motor de consulta do /ask: um plano (tipo, filtros, ordem, limite) vira UM SELECT parametrizado.
@@ -41,6 +42,10 @@ type askPlan struct {
 	Page      int64    // 0 = primeira
 	CountOnly bool     // só conta
 	Total     bool     // além da página, conta tudo
+
+	Show      bool   // "mostre o post X": procura UM item pelos campos show_by do tipo
+	ShowValue string // o que a pessoa escreveu depois do tipo
+	Item      bool   // (interno do Show) traz os campos detail
 }
 
 type askResult struct {
@@ -50,6 +55,12 @@ type askResult struct {
 	Page     int64
 	Limit    int64
 	More     bool
+
+	Item         bool     // um item só, com os campos detail
+	Ambiguous    bool     // o Show achou vários: a lista curta vem sem os campos detail
+	Truncated    bool     // algum campo detail foi cortado em detail_max_bytes
+	DetailFields []string // os campos detail que vieram no item
+	Searched     bool     // era um Show (acha ou não: a resposta é a mesma para item escondido e inexistente)
 }
 
 const askDefaultLimit = 20
@@ -128,6 +139,8 @@ func (b *askBuild) cond(fl askFilter) error {
 		switch fl.Op {
 		case "eq":
 			b.add(col+" = ?", s)
+		case "ieq": // só o Show usa: igualdade sem olhar maiúsculas
+			b.add("LOWER("+col+") = ?", strings.ToLower(s))
 		case "contains":
 			b.add("LOWER("+col+") LIKE ? ESCAPE '!'", "%"+askEscapeLike(strings.ToLower(s))+"%")
 		case "starts":
@@ -374,6 +387,9 @@ func (c *askConfig) run(r dbRunner, kind, level string, p askPlan) (*askResult, 
 	if view == nil {
 		return nil, askFail("unknown_type", "não existe o tipo %q", p.Type)
 	}
+	if p.Show {
+		return c.runShow(r, kind, level, p, view)
+	}
 	t := view.typ
 	b := &askBuild{kind: kind, view: view, t: t}
 	b.policy()
@@ -415,12 +431,24 @@ func (c *askConfig) run(r dbRunner, kind, level string, p askPlan) (*askResult, 
 		return res, nil
 	}
 
+	// campos detail (o texto longo) só saem quando se pede um item; em lista e em contagem nunca
 	fields := view.fields
+	if !p.Item {
+		fields = nil
+		for _, fn := range view.fields {
+			if !t.fields[fn].detail {
+				fields = append(fields, fn)
+			}
+		}
+	}
 	if p.Fields != nil {
 		fields = nil
 		for _, fn := range p.Fields {
 			if !view.has(fn) {
 				return nil, askFail("unknown_field", "o tipo %q não tem o campo %q", t.name, fn)
+			}
+			if t.fields[fn].detail && !p.Item {
+				return nil, askFail("bad_plan", "o campo %q só aparece quando se pede um item", fn)
 			}
 			fields = append(fields, fn)
 		}
@@ -457,6 +485,9 @@ func (c *askConfig) run(r dbRunner, kind, level string, p askPlan) (*askResult, 
 		of := t.fields[p.Order.Field]
 		if of.kind == "tags" {
 			return nil, askFail("bad_op", "não dá para ordenar por %q (%s)", of.name, of.kind)
+		}
+		if of.detail {
+			return nil, askFail("bad_op", "não dá para ordenar por %q (texto longo)", of.name)
 		}
 		dir := " ASC"
 		if p.Order.Desc {
@@ -551,6 +582,9 @@ func (c *askConfig) run(r dbRunner, kind, level string, p askPlan) (*askResult, 
 		}
 	}
 	res.Page, res.Limit = page, limit
+	if p.Item {
+		c.clipDetail(t, res)
+	}
 	if p.Total {
 		n, err := count()
 		if err != nil {
@@ -649,3 +683,75 @@ func askRead(f *askField, v any) any {
 }
 
 var _ = sql.ErrNoRows
+
+// clipDetail corta o texto dos campos detail de um item para caber em detail_max_bytes (somando os campos).
+func (c *askConfig) clipDetail(t *askType, res *askResult) {
+	budget := c.limits.detailMax
+	for _, m := range res.Items {
+		for i, k := range m.Keys {
+			f := t.fields[k.(string)]
+			if f == nil || !f.detail {
+				continue
+			}
+			s, ok := m.Vals[i].(string)
+			if !ok {
+				continue
+			}
+			if len(s) > budget {
+				cut := budget
+				for cut > 0 && !utf8.RuneStart(s[cut]) {
+					cut--
+				}
+				m.Vals[i] = s[:cut]
+				budget = 0
+				res.Truncated = true
+				continue
+			}
+			budget -= len(s)
+		}
+	}
+}
+
+// runShow acha UM item: tenta cada campo de show_by (na ordem, só os que o nível enxerga), primeiro por igualdade
+// exata e depois sem olhar maiúsculas. Um item = todos os campos do nível, com os detail. Vários = a lista curta, sem
+// os detail. Nenhum = vazio. Item escondido pela regra do nível (where) e item que não existe dão o mesmo resultado.
+func (c *askConfig) runShow(r dbRunner, kind, level string, p askPlan, view *askView) (*askResult, error) {
+	t := view.typ
+	const shortList = 5
+	for _, fn := range t.showBy {
+		if !view.has(fn) {
+			continue
+		}
+		for _, op := range []string{"eq", "ieq"} {
+			q := askPlan{Type: p.Type, Limit: shortList, Filters: []askFilter{{Field: fn, Op: op, Vals: []any{p.ShowValue}}}}
+			res, err := c.run(r, kind, level, q)
+			if err != nil {
+				return nil, err
+			}
+			switch {
+			case len(res.Items) == 0:
+				continue
+			case len(res.Items) == 1 && !res.More:
+				q.Item, q.Limit = true, 1
+				full, err := c.run(r, kind, level, q)
+				if err != nil {
+					return nil, err
+				}
+				if len(full.Items) != 1 {
+					continue // sumiu entre as duas consultas
+				}
+				full.Item, full.Searched = true, true
+				for _, fn := range view.fields {
+					if t.fields[fn].detail {
+						full.DetailFields = append(full.DetailFields, fn)
+					}
+				}
+				return full, nil
+			default:
+				res.Ambiguous, res.Searched = true, true
+				return res, nil
+			}
+		}
+	}
+	return &askResult{Searched: true, Page: 1, Limit: shortList}, nil
+}

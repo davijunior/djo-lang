@@ -153,6 +153,27 @@ Recusado de propósito, com o motivo (kind `unsupported`, 422): OU/or, negação
 `name`=nome, `views`=visualizacoes, `created_at`=criado em/criado, `published_at`=publicado em/publicado...), só se o campo existe e o nível o
 enxerga. O que o `ask.djo` declara vence o padrão; tipos nunca têm padrão (declare `Ask.alias:"post":["artigos"]`).
 
+## Texto longo (`detail`) e "mostre um item"
+
+Campos longos (o corpo de um post) não entram em listas. No `Ask.type`:
+
+```
+Ask.type:"post":{"table": "posts", "show_by": ["slug", "title"], "fields": {
+    "slug": {"kind": "text"},
+    "title": {"kind": "text"},
+    "body": {"kind": "text", "detail": true}
+}}
+Ask.limits:{"detail_max_bytes": 100000}
+```
+
+- **`detail: true`** (só em campo `text`): o campo nunca sai em lista, em contagem nem no JSON `data`; em filtro continua valendo se o nível o enxerga. Pedir o campo explicitamente numa lista ou ordenar por ele é recusado.
+- **`show_by`**: até 4 campos `text` ou `enum` (nunca um `detail`), procurados na ordem; cada um primeiro por igualdade exata e depois sem olhar maiúsculas. Só valem os que o nível enxerga: sem nenhum, o tipo não tem "mostre um item" para aquele nível.
+- **Frases** (o parser só entende como "item" se o tipo vem no singular e o resto não é uma cláusula; entre aspas vale qualquer texto, sem aspas só palavras soltas, sem vírgulas): `mostre o post "bem-vindo"`, `mostra o post bem-vindo`, `show post "welcome"`, `show me the post "welcome"`, `o post bem-vindo`, `the post "welcome"`. `show posts` e `list posts with title x` continuam sendo listas. Um apelido de tipo (`artigos`) só vale com o valor entre aspas.
+- **Resultado:** um item = todos os campos que o nível enxerga, incluindo os `detail` (`"item"`, `"detail_fields"`, `"truncated"`); vários = lista curta em `data` com `"ambiguous": true`, sem os `detail`; nenhum = `"item": null`. Um item escondido pelo `where` do nível e um que não existe dão a mesma resposta.
+- **Segurança:** o `detail` só aparece se estiver em `fields` do nível; `Ask.deny` vence; o `where` do nível vale (rascunho não aparece nem por `show`); o valor digitado nunca vira SQL (parâmetro) nem nome; no máximo 9 consultas por pedido (até 4 campos, 2 comparações cada, e a busca do item).
+- **Tamanho:** `detail_max_bytes` (padrão 200 KB, até 500000) é o teto de texto longo devolvido num item; ao cortar, na fronteira de um caractere, a resposta traz `"truncated": true`.
+- **`djo ask`:** um item sai como `campo: valor`, o texto longo por último, em bloco. **Página `/ask`:** o texto longo vai em `<pre>` escapado.
+
 ## Verificação
 
 Testado em SQLite (`ask_engine_test.go`, `ask_test.go`), em todos os perfis de build.

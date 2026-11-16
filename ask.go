@@ -32,9 +32,11 @@ var (
 )
 
 const (
-	askDefaultMax     = 100
-	askMaxResultsCap  = 1000
-	askDefaultTimeout = 5000
+	askDefaultMax       = 100
+	askMaxResultsCap    = 1000
+	askDefaultTimeout   = 5000
+	askDefaultDetailMax = 200 * 1024
+	askMaxDetailMax     = 500_000 // o djo ask lê no máximo 1 MB de resposta
 )
 
 type askField struct {
@@ -43,6 +45,7 @@ type askField struct {
 	values             []string // enum
 	from, key, value   string   // tags: tabela de ligação, coluna da chave e coluna do valor
 	main               bool
+	detail             bool // texto longo: nunca sai em lista nem em contagem, só ao pedir um item (show_by)
 }
 
 type askType struct {
@@ -51,6 +54,7 @@ type askType struct {
 	order              []string
 	aliases            []string
 	fieldAliases       []askAlias
+	showBy             []string // campos pelos quais "mostre o post X" procura um item, na ordem
 }
 
 type askCond struct {
@@ -66,6 +70,7 @@ type askAllow struct {
 
 type askLimits struct {
 	maxResults, perMinute, globalPerMinute, timeoutMS int // globalPerMinute 0 = sem teto global
+	detailMax                                         int // bytes de campos detail devolvidos num item
 }
 
 type askConfig struct {
@@ -87,7 +92,7 @@ func newAskConfig() *askConfig {
 	return &askConfig{
 		types:  map[string]*askType{},
 		levels: map[string][]askAllow{},
-		limits: askLimits{maxResults: askDefaultMax, perMinute: 60, timeoutMS: askDefaultTimeout},
+		limits: askLimits{maxResults: askDefaultMax, perMinute: 60, timeoutMS: askDefaultTimeout, detailMax: askDefaultDetailMax},
 		reply:  map[string]map[string]string{},
 	}
 }
@@ -246,7 +251,7 @@ func (in *Interp) addAskType(line int, a []any) {
 		fail(line, "Ask.type:\"%s\" espera um mapa com \"table\" e \"fields\"", name)
 	}
 	ctx := "Ask.type:\"" + name + "\""
-	mapKeys(line, m, ctx, "table", "id", "struct", "fields")
+	mapKeys(line, m, ctx, "table", "id", "struct", "fields", "show_by")
 	t := &askType{name: name, idCol: "id", fields: map[string]*askField{}}
 	var sd *StructDecl
 	for i, k := range m.Keys {
@@ -256,6 +261,8 @@ func (in *Interp) addAskType(line int, a []any) {
 			t.table = identArg(line, v, ctx+": \"table\"")
 		case "id":
 			t.idCol = identArg(line, v, ctx+": \"id\"")
+		case "show_by":
+			t.showBy = askStrList(line, v, ctx+": \"show_by\"")
 		case "struct":
 			sn, _ := v.(string)
 			sd = in.structs[sn]
@@ -293,6 +300,24 @@ func (in *Interp) addAskType(line int, a []any) {
 		// uma data "principal" por tipo; o /ask usa quando a frase não diz qual
 		fail(line, "%s: só um campo pode ser \"main\"", ctx)
 	}
+	if len(t.showBy) > 4 {
+		fail(line, "%s: \"show_by\" aceita até 4 campos", ctx)
+	}
+	seen := map[string]bool{}
+	for _, sb := range t.showBy {
+		f := t.fields[sb]
+		switch {
+		case f == nil:
+			fail(line, "%s: \"show_by\" cita o campo '%s', que não existe", ctx, sb)
+		case f.kind != "text" && f.kind != "enum":
+			fail(line, "%s: \"show_by\" só aceita campos text ou enum ('%s' é %s)", ctx, sb, f.kind)
+		case f.detail:
+			fail(line, "%s: o campo '%s' é \"detail\" e não pode ser usado em \"show_by\"", ctx, sb)
+		case seen[sb]:
+			fail(line, "%s: \"show_by\" repete o campo '%s'", ctx, sb)
+		}
+		seen[sb] = true
+	}
 	c.types[name] = t
 	c.typeOrder = append(c.typeOrder, name)
 }
@@ -305,7 +330,7 @@ func mapOf(m *Map, key string) *Map {
 
 func (in *Interp) askField(line int, tctx, fname string, spec *Map, sd *StructDecl) *askField {
 	ctx := tctx + " campo '" + fname + "'"
-	mapKeys(line, spec, ctx, "kind", "column", "as", "values", "from", "key", "value", "attr", "main")
+	mapKeys(line, spec, ctx, "kind", "column", "as", "values", "from", "key", "value", "attr", "main", "detail")
 	f := &askField{name: fname, column: fname}
 	declared := ""
 	attr := fname
@@ -345,6 +370,12 @@ func (in *Interp) askField(line int, tctx, fname string, spec *Map, sd *StructDe
 				fail(line, "%s: \"main\" precisa ser true ou false", ctx)
 			}
 			f.main = b
+		case "detail":
+			b, ok := v.(bool)
+			if !ok {
+				fail(line, "%s: \"detail\" precisa ser true ou false", ctx)
+			}
+			f.detail = b
 		}
 	}
 	kind := declared
@@ -400,6 +431,12 @@ func (in *Interp) askField(line int, tctx, fname string, spec *Map, sd *StructDe
 		}
 	} else if f.from != "" || f.key != "" || f.value != "" {
 		fail(line, "%s: \"from\", \"key\" e \"value\" só valem em campo tags", ctx)
+	}
+	if f.detail && kind != "text" {
+		fail(line, "%s: \"detail\" só vale em campo text (o texto longo, como o corpo de um post)", ctx)
+	}
+	if f.detail && f.main {
+		fail(line, "%s: um campo \"detail\" não pode ser \"main\"", ctx)
 	}
 	if f.main && kind != "date" && kind != "datetime" {
 		fail(line, "%s: \"main\" só vale em campo date ou datetime", ctx)
@@ -605,7 +642,7 @@ func (in *Interp) addAskLimits(line int, a []any) {
 	if !ok {
 		fail(line, "Ask.limits espera um mapa, como {\"max_results\": 100}")
 	}
-	mapKeys(line, m, "Ask.limits", "max_results", "per_minute", "global_per_minute", "timeout_ms")
+	mapKeys(line, m, "Ask.limits", "max_results", "per_minute", "global_per_minute", "timeout_ms", "detail_max_bytes")
 	for i, k := range m.Keys {
 		n, ok := m.Vals[i].(int64)
 		if !ok {
@@ -627,6 +664,11 @@ func (in *Interp) addAskLimits(line int, a []any) {
 				fail(line, "Ask.limits: \"global_per_minute\" precisa ficar entre 1 e 10000000")
 			}
 			c.limits.globalPerMinute = int(n)
+		case "detail_max_bytes":
+			if n < 1024 || n > askMaxDetailMax {
+				fail(line, "Ask.limits: \"detail_max_bytes\" precisa ficar entre 1024 e %d", askMaxDetailMax)
+			}
+			c.limits.detailMax = int(n)
 		case "timeout_ms":
 			if n < 100 || n > 10000 {
 				fail(line, "Ask.limits: \"timeout_ms\" precisa ficar entre 100 e 10000")

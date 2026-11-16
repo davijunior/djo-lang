@@ -428,11 +428,13 @@ func (s *Server) askAnswer(cfg *askConfig, level, question string, page int64, h
 var askSay = map[string]map[string]string{
 	"en": {
 		"count": "There are %d.", "none": "No results.", "some": "Showing %d result(s), page %d.",
-		"more": ` Say "page %d" to see more.`,
+		"more":  ` Say "page %d" to see more.`,
+		"found": "Here is the %s.", "several": "Found %d matches; say which one (use the exact title).", "notfound": "I did not find it.",
 	},
 	"pt": {
 		"count": "São %d.", "none": "Nenhum resultado.", "some": "Mostrando %d resultado(s), página %d.",
-		"more": ` Diga "pagina %d" para ver mais.`,
+		"more":  ` Diga "pagina %d" para ver mais.`,
+		"found": "Encontrei: %s.", "several": "Achei %d; diga qual (use o título exato).", "notfound": "Não encontrei.",
 	},
 }
 
@@ -444,6 +446,12 @@ func askBuildResponse(lang string, plan askPlan, res *askResult) *Map {
 	switch {
 	case plan.CountOnly:
 		text = askSprintf(say["count"], int(res.Count))
+	case plan.Show && res.Item:
+		text = askSprintf(say["found"], plan.Type)
+	case plan.Show && res.Ambiguous:
+		text = askSprintf(say["several"], len(res.Items))
+	case plan.Show:
+		text = say["notfound"]
 	case len(res.Items) == 0:
 		text = say["none"]
 	default:
@@ -456,7 +464,20 @@ func askBuildResponse(lang string, plan askPlan, res *askResult) *Map {
 	m.set("type", plan.Type)
 	if plan.CountOnly {
 		m.set("count", res.Count)
+	} else if plan.Show && res.Item {
+		// um item só: todos os campos que o nível enxerga, com o texto longo (detail)
+		m.set("item", res.Items[0])
+		df := &Array{}
+		for _, f := range res.DetailFields {
+			df.Items = append(df.Items, f)
+		}
+		m.set("detail_fields", df)
+		m.set("truncated", res.Truncated)
 	} else {
+		if plan.Show {
+			m.set("item", nil)
+			m.set("ambiguous", res.Ambiguous)
+		}
 		arr := &Array{}
 		for _, it := range res.Items {
 			arr.Items = append(arr.Items, it)
@@ -477,6 +498,10 @@ func askBuildResponse(lang string, plan askPlan, res *askResult) *Map {
 	// calls: o que foi consultado, em forma estruturada (transparência: nada acontece que a pessoa não possa ver)
 	call := newMap()
 	call.set("op", "query")
+	if plan.Show {
+		call.set("op", "show")
+		call.set("value", plan.ShowValue)
+	}
 	call.set("type", plan.Type)
 	fs := &Array{}
 	for _, f := range plan.Filters {
@@ -507,11 +532,11 @@ func askBuildResponse(lang string, plan askPlan, res *askResult) *Map {
 var askPageText = map[string]map[string]string{
 	"en": {
 		"title": "Ask", "h": "Ask a question", "ph": "for example: list posts from 2025-01-01 to 2025-12-31", "go": "Ask",
-		"ex": "Examples", "res": "Answer", "more": "Next page", "hint": "This page only reads. Questions are answered in English or Portuguese.",
+		"ex": "Examples", "res": "Answer", "more": "Next page", "cut": "The text was cut at the size limit.", "hint": "This page only reads. Questions are answered in English or Portuguese.",
 	},
 	"pt": {
 		"title": "Perguntar", "h": "Faça uma pergunta", "ph": "por exemplo: liste posts de 2025-01-01 até 2025-12-31", "go": "Perguntar",
-		"ex": "Exemplos", "res": "Resposta", "more": "Próxima página", "hint": "Esta página só lê. As perguntas valem em português ou inglês.",
+		"ex": "Exemplos", "res": "Resposta", "more": "Próxima página", "cut": "O texto foi cortado no limite de tamanho.", "hint": "Esta página só lê. As perguntas valem em português ou inglês.",
 	},
 }
 
@@ -569,7 +594,7 @@ func (s *Server) askPage(w http.ResponseWriter, r *http.Request, cfg *askConfig,
 	var b strings.Builder
 	b.WriteString("<!doctype html><html lang=\"" + ui + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
 	b.WriteString("<title>" + esc(tx["title"]) + "</title><meta name=\"robots\" content=\"noindex\">")
-	b.WriteString("<style>body{font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}input[type=text]{width:100%;padding:.5rem;box-sizing:border-box}button{margin-top:.5rem;padding:.4rem 1rem}table{border-collapse:collapse;margin:1rem 0;width:100%}td,th{border:1px solid #8884;padding:.25rem .5rem;text-align:left;vertical-align:top}code{background:#8882;padding:0 .25rem}.err{color:#b00020}</style>")
+	b.WriteString("<style>body{font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}input[type=text]{width:100%;padding:.5rem;box-sizing:border-box}button{margin-top:.5rem;padding:.4rem 1rem}table{border-collapse:collapse;margin:1rem 0;width:100%}td,th{border:1px solid #8884;padding:.25rem .5rem;text-align:left;vertical-align:top}code{background:#8882;padding:0 .25rem}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#8881;padding:.5rem;border:1px solid #8884}dt{font-weight:bold}.err{color:#b00020}</style>")
 	b.WriteString("</head><body><main><h1>" + esc(tx["h"]) + "</h1>")
 	qc := askClean(q)
 	b.WriteString("<form method=\"post\" action=\"/ask\" enctype=\"application/x-www-form-urlencoded\"><label for=\"q\" hidden>" + esc(tx["h"]) + "</label>")
@@ -587,6 +612,11 @@ func (s *Server) askPage(w http.ResponseWriter, r *http.Request, cfg *askConfig,
 		} else {
 			ans, _ := res.get("answer")
 			b.WriteString("<p>" + esc(askCell(ans)) + "</p>")
+			if it, ok := res.get("item"); ok && it != nil {
+				df, _ := res.get("detail_fields")
+				tr, _ := res.get("truncated")
+				askItem(&b, it.(*Map), df, tr == true, tx)
+			}
 			if d, ok := res.get("data"); ok {
 				askTable(&b, d.(*Array))
 			}
@@ -614,6 +644,35 @@ func (s *Server) askPage(w http.ResponseWriter, r *http.Request, cfg *askConfig,
 	w.WriteHeader(status)
 	if r.Method != http.MethodHead {
 		io.WriteString(w, b.String())
+	}
+}
+
+// askItem mostra um item: os campos curtos numa lista e o texto longo (detail) em <pre>, sempre escapado
+// (nada de Markdown nem de HTML do site vira marcação aqui).
+func askItem(b *strings.Builder, m *Map, detailFields any, truncated bool, tx map[string]string) {
+	esc := html.EscapeString
+	long := map[string]bool{}
+	if arr, ok := detailFields.(*Array); ok {
+		for _, f := range arr.Items {
+			long[askCell(f)] = true
+		}
+	}
+	b.WriteString("<dl>")
+	for i, k := range m.Keys {
+		name := fmt.Sprint(k)
+		if !long[name] {
+			b.WriteString("<dt>" + esc(name) + "</dt><dd>" + esc(askCell(m.Vals[i])) + "</dd>")
+		}
+	}
+	b.WriteString("</dl>")
+	for i, k := range m.Keys {
+		name := fmt.Sprint(k)
+		if long[name] {
+			b.WriteString("<h3>" + esc(name) + "</h3><pre>" + esc(askCell(m.Vals[i])) + "</pre>")
+		}
+	}
+	if truncated {
+		b.WriteString("<p><small>" + esc(tx["cut"]) + "</small></p>")
 	}
 }
 
