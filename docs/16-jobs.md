@@ -59,6 +59,10 @@ j["state"]                // "queued", "running", "done", "dead" ou "canceled"
 Job.cancel:id             // true se ainda estava na fila
 ```
 
+`Job.status` devolve `nil` quando o job não existe, e também quando ele foi **descartado**: um job retido
+(veja abaixo) some da fila se a página ou a `action` que o enfileirou der erro. Um job retido aparece como
+`"queued"`, e dá para cancelá-lo com `Job.cancel`.
+
 O mapa do `Job.status` tem `id`, `fn`, `state`, `tries`, `max_tries`, `run_at`, `created_at`,
 `finished_at` (`DateTime`; `nil` se não terminou) e `error` (o último erro, ou `nil`).
 
@@ -68,12 +72,21 @@ O `Job.run` **retém** o job até a página (ou a `action`) **terminar sem erro*
 do `Job.run`, o job é descartado: ninguém recebe o e-mail de boas-vindas de um cadastro que falhou. O mesmo
 vale para um `Job.run` feito **dentro de um job**: o filho só entra na fila quando o pai termina bem.
 
+Enquanto espera, o job fica gravado na fila no estado interno `held` (retido). Ele já ocupa uma vaga dos
+10.000 pendentes e já vale para a `key`, mas nenhum worker o pega; ao fim da página ou da `action` ele passa
+para `queued`, ou é apagado se deu erro. O `djo jobs` mostra a contagem de `held`; o `Job.status` não
+distingue: mostra `"queued"`.
+
 ## Como o job roda
 
 - Num contexto novo, como uma requisição servida, mas **sem requisição**: `Http.bearer`, `Session` e `Route` não
   existem ali. `Db`, `File`, `Env`, `Mail` e `Http.get/post` funcionam, com as mesmas regras de sempre
-  (`Http`: até 20 chamadas por job; `File`: 10 MB gravados; `Time.sleep` vale até o `timeout`).
-- Tem **limite de tempo** (`timeout`) e de passos. Estourou, a tentativa falha.
+  (`Http`: até 20 chamadas por job; `File`: 10 MB gravados; `Time.sleep` espera no máximo o `timeout` do job, somando todas as chamadas).
+- Tem **limite de tempo** (`timeout`) e de passos. Estourou, a tentativa falha. O tempo limite interrompe um job
+  que está **trabalhando** (um laço, por exemplo) com "o job passou do tempo limite (timeout)". Já um
+  `Time.sleep` que passaria do `timeout` dá o erro de `Time.sleep` da tabela de erros, abaixo.
+- Numa página ou `action` servida, o `Time.sleep` espera no máximo **2 segundos no total**. Trabalho mais longo
+  que isso é o motivo de existir o `Job.run`.
 - O `print` do job vai para o **log** do servidor (até 4 KB por tentativa).
 - Em `djo serve -dev` o job roda normalmente, e o `Mail.send` dentro dele grava o `.eml` em `_saida/emails/`.
 - `Job.give_up:"motivo"` (só dentro de um job) desiste **sem** repetir: o job vai direto para `dead`.
@@ -211,5 +224,8 @@ e o erro. Ele acontece uma vez só.
 | `Job.run: a função 'x' não existe no core/ do projeto` | o nome está errado, ou a função não está no `core/` |
 | `Job.run: 'x' precisa ter zero ou um parâmetro` | a função aceita só o mapa de argumentos |
 | `o job passou do tempo limite (timeout)` | aumente o `timeout` ou divida o trabalho em jobs menores |
+| `Time.sleep: páginas servidas podem esperar no máximo 2 segundos no total` | você dormiu mais de 2 s numa página ou `action`; passe o trabalho para um `Job.run` |
+| `Time.sleep: o job pode esperar no máximo N segundos no total (o timeout)` | a soma dos `Time.sleep` do job passou do `timeout`; aumente o `timeout` ou espere menos |
+| `o job passou do limite de passos e foi interrompido` | o job tem um laço muito longo; divida o trabalho em jobs menores |
 | `o processo parou durante a tentativa (o lease venceu)` | o servidor caiu ou foi desligado no meio; o job foi reenfileirado |
 | `agenda.djo: ... a agenda anterior continua valendo` | o arquivo novo tem erro; corrija (o erro vai para o log) |
