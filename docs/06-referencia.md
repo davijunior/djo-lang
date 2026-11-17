@@ -159,6 +159,23 @@ booster só usa `Env` se pedir a permissão no `booster.json`.
 
 `to`, `subject` e `text` são obrigatórios; `from` só troca o nome exibido (o endereço é sempre o de `DJO_SMTP_FROM`). A configuração vem **só do ambiente** (`DJO_SMTP_HOST`, `DJO_SMTP_PORT`, `DJO_SMTP_USER`, `DJO_SMTP_PASS`, `DJO_SMTP_FROM`, `DJO_SMTP_SECURE`), com STARTTLS obrigatório (ou TLS na 465) e certificado sempre verificado. Em `djo serve -dev` não envia: grava `.eml` em `_saida/emails/` (use `-mail-send` para enviar mesmo assim). No `djo spec` nunca envia. Não existe nos builds `nonet`; um booster precisa da permissão `Mail`. Veja [E-mail](15-email.md).
 
+## Job e Schedule
+
+| Chamada | O que faz |
+|---|---|
+| `Job.run:"fn":{args}` | enfileira a função `fn` do `core/` para rodar **depois da resposta**; devolve o id (Int), ou `nil` se a fila está cheia |
+| `Job.run:"fn":{args}:{"in": "10m", "at": ..., "tries": 3, "timeout": "60s", "key": "..."}` | com opções (`in` e `at` não valem juntos) |
+| `Job.status:id` | `{id, fn, state, tries, max_tries, run_at, created_at, finished_at, error}`, ou `nil` |
+| `Job.cancel:id` | cancela um job que ainda está na fila (`true`/`false`) |
+| `Job.give_up:"motivo"` | (dentro de um job) desiste sem repetir |
+| `Schedule.every:"10m":"fn"` `Schedule.cron:"20 3 * * *":"fn"` | (só no `agenda.djo`) dispara `fn` de tempos em tempos; cron em UTC |
+| `Spec.jobs:` `Spec.run_jobs:` `Spec.run_job:id` `Spec.agenda:` | (só no `djo spec`) veja [Testes](14-testes.md) |
+
+Cada job roda **pelo menos uma vez**: escreva a função para ser idempotente. A fila é um SQLite local em
+`_dados/jobs.db`; `djo serve -jobs N` escolhe os workers (padrão 2); `djo jobs` mostra e conserta a fila. O
+`Job.run` só enfileira se a página terminar sem erro. Não existe nos builds `nodb` e `noweb`; um booster precisa
+da permissão `Job`. Veja [Tarefas em segundo plano e agenda](16-jobs.md).
+
 ## Time
 
 Datas são `Int`: segundos desde 1970 (UTC). Somar e subtrair é aritmética comum
@@ -308,7 +325,7 @@ No código: `nome.função:argumento`, por exemplo `markdown.render:texto`. Um b
 djo spec [-e filtro] [--json] [--lang en] [--seed N] [pasta | arquivo_spec.djo]
 ```
 
-Roda as funções `it_...` dos arquivos `*_spec.djo` (com `antes` e `depois` opcionais), cada uma isolada e com os bancos SQLite numa pasta temporária. Sai com `1` se algum teste falhar ou der erro. O namespace `Spec` (`fail`, `skip`, `try`, `lang`, `emails`, `get`, `post`, `put`, `patch`, `delete`) **só existe dentro do `djo spec`**; fora dele, qualquer chamada dá erro. Os matchers (`expect.eq:real:esperado`, `include`, `raises`, `status`, `json`...) vêm do booster `expect`. A pasta `spec/` nunca é servida nem entra no `djo build`. Veja [Testes](14-testes.md).
+Roda as funções `it_...` dos arquivos `*_spec.djo` (com `antes` e `depois` opcionais), cada uma isolada e com os bancos SQLite numa pasta temporária. Sai com `1` se algum teste falhar ou der erro. O namespace `Spec` (`fail`, `skip`, `try`, `lang`, `emails`, `jobs`, `run_jobs`, `run_job`, `agenda`, `get`, `post`, `put`, `patch`, `delete`) **só existe dentro do `djo spec`**; fora dele, qualquer chamada dá erro. Os matchers (`expect.eq:real:esperado`, `include`, `raises`, `status`, `json`...) vêm do booster `expect`. A pasta `spec/` nunca é servida nem entra no `djo build`. Veja [Testes](14-testes.md).
 
 ## Mensagens de erro
 

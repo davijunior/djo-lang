@@ -83,8 +83,12 @@ type Interp struct {
 	outerLine       int                 // linha, no código do projeto, da última chamada a um booster
 	pStructs        map[string]*StructDecl
 	pIfaces         map[string]*InterfaceDecl
-	cur             *booster  // booster em execução (nil: core ou página)
-	mail            *mailHost // o que fazer com Mail.send numa página servida (nil: enviar de verdade)
+	cur             *booster     // booster em execução (nil: core ou página)
+	job             *jobHost     // Job.run: onde enfileirar (nil fora do servidor e do djo spec)
+	sleepMax        int64        // >0: limite de Time.sleep em ms por execução (jobs)
+	outMax          int          // >0: limite de chamadas externas por execução (jobs)
+	schedLoad       *[]*schedDef // só enquanto o agenda.djo é lido
+	mail            *mailHost    // o que fazer com Mail.send numa página servida (nil: enviar de verdade)
 }
 
 const maxDepth = 2000
@@ -138,9 +142,15 @@ func (in *Interp) tick() {
 		if in.spec != nil {
 			fail(0, "o spec passou do limite de passos (um laço sem fim?) e foi interrompido")
 		}
+		if in.job != nil && in.job.inJob {
+			fail(0, "o job passou do limite de passos e foi interrompido")
+		}
 		fail(0, "a página demorou demais e foi interrompida (limite de passos)")
 	}
 	if in.steps&0x3ff == 0 && !in.deadline.IsZero() && time.Now().After(in.deadline) {
+		if in.job != nil && in.job.inJob && in.spec == nil {
+			fail(0, "o job passou do tempo limite (timeout) e foi interrompido")
+		}
 		fail(0, "o spec demorou demais e foi interrompido (limite de tempo)")
 	}
 }

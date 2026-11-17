@@ -61,7 +61,7 @@ const (
 var boosterName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 
 // permissões que um booster precisa declarar; o resto (Json, Time, Hash...) é puro.
-var restrictedNS = map[string]bool{"Http": true, "File": true, "Db": true, "Session": true, "Serial": true, "Route": true, "Env": true, "Spec": true, "Mail": true}
+var restrictedNS = map[string]bool{"Http": true, "File": true, "Db": true, "Session": true, "Serial": true, "Route": true, "Env": true, "Spec": true, "Mail": true, "Job": true}
 
 // checkPerm barra um booster que usa um namespace com efeito no mundo sem declarar.
 func (in *Interp) checkPerm(ns string, line int) {
@@ -131,7 +131,7 @@ func readBoosterManifest(dir string) (*boosterManifest, error) {
 	}
 	for _, p := range m.Permissoes {
 		if !restrictedNS[p] {
-			return nil, fmt.Errorf("booster.json: permissão '%s' desconhecida (valem: Http, File, Db, Session, Serial, Route, Env, Mail, Spec)", p)
+			return nil, fmt.Errorf("booster.json: permissão '%s' desconhecida (valem: Http, File, Db, Session, Serial, Route, Env, Mail, Job, Spec)", p)
 		}
 	}
 	return &m, nil
@@ -468,7 +468,7 @@ func copyTree(src, dst string) error {
 func boosterCreate(root string, args []string, out, errw io.Writer) int {
 	fs := flag.NewFlagSet("booster create", flag.ContinueOnError)
 	fs.SetOutput(errw)
-	perm := fs.String("perm", "", "permissões que o booster pede, separadas por vírgula (Http, File, Db, Session, Serial, Route, Env, Mail, Spec)")
+	perm := fs.String("perm", "", "permissões que o booster pede, separadas por vírgula (Http, File, Db, Session, Serial, Route, Env, Mail, Job, Spec)")
 	pos, err := parseMixed(fs, args)
 	if err != nil {
 		return 2
@@ -488,7 +488,7 @@ func boosterCreate(root string, args []string, out, errw io.Writer) int {
 			continue
 		}
 		if !restrictedNS[p] {
-			fmt.Fprintf(errw, "permissão '%s' desconhecida (valem: Http, File, Db, Session, Serial, Route, Env, Mail, Spec)\n", p)
+			fmt.Fprintf(errw, "permissão '%s' desconhecida (valem: Http, File, Db, Session, Serial, Route, Env, Mail, Job, Spec)\n", p)
 			return 2
 		}
 		perms = append(perms, p)

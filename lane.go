@@ -41,7 +41,8 @@ func newLane(conc int, rate float64) *lane {
 	return &lane{sem: make(chan struct{}, conc), wait: 250 * time.Millisecond, rate: rate, burst: 2 * rate, clients: map[string]*bucket{}}
 }
 
-func clientIP(r *http.Request) string {
+// connIP é o endereço da conexão (o RemoteAddr sem a porta), sem olhar cabeçalho nenhum.
+func connIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
@@ -63,8 +64,14 @@ func (l *lane) allow(ip string, now time.Time) bool {
 					delete(l.clients, k)
 				}
 			}
-			if len(l.clients) >= 10000 {
-				return false
+			if len(l.clients) >= 10000 { // ainda cheia: descarta o mais antigo (não recusa quem chega)
+				oldest, ot := "", now
+				for k, v := range l.clients {
+					if v.last.Before(ot) || oldest == "" {
+						oldest, ot = k, v.last
+					}
+				}
+				delete(l.clients, oldest)
 			}
 		}
 		b = &bucket{tokens: l.burst, last: now}

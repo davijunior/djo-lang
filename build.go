@@ -102,6 +102,9 @@ func checkProject(dir string, files []string) []string {
 	if err := checkAsk(dir); err != nil {
 		problems = append(problems, err.Error())
 	}
+	if err := checkAgenda(dir); err != nil {
+		problems = append(problems, err.Error())
+	}
 	return problems
 }
 

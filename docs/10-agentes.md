@@ -248,8 +248,9 @@ djo serve -agent-conc 16 -agent-rate 50
 | `-agent-rate N` | 50 | requisições por segundo por cliente (rajada de 2N); `0` desliga |
 
 Sem vaga ou acima da taxa, o agente recebe `429 Too Many Requests` com `Retry-After: 1` e um JSON
-`{"erro": ...}`. O cliente é identificado pelo IP de conexão. Atrás de um proxy reverso todos parecem ter o
-mesmo IP: nesse caso, ajuste `-agent-rate` para o total, ou `0` e limite no próprio proxy.
+`{"erro": ...}`. O cliente é identificado pelo IP do visitante: o da conexão ou, atrás de um proxy configurado
+(`-trusted-proxy` explícito), o de `X-Forwarded-For` (veja [Produção atrás de um proxy](04-web.md#produção-atrás-de-um-proxy)).
+Sem proxy confiável, todos parecem ter o IP do proxy: ajuste `-agent-rate` para o total, ou `0` e limite no próprio proxy.
 
 **Código já interpretado.** O servidor guarda a versão interpretada de cada `.djo`, `.djo.html` e `core/`,
 refeita só quando o arquivo muda (horário ou tamanho). Isso vale para todas as páginas, de pessoas ou agentes, e

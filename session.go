@@ -104,7 +104,7 @@ func (in *Interp) setSessionCookie(value string, maxAge int) {
 	}
 	in.resp.cookies = append(kept, &http.Cookie{
 		Name: sessCookie, Value: value, Path: "/", HttpOnly: true, MaxAge: maxAge,
-		SameSite: http.SameSiteLaxMode, Secure: in.req.TLS != nil,
+		SameSite: http.SameSiteLaxMode, Secure: requestIsHTTPS(in.req),
 	})
 }
 

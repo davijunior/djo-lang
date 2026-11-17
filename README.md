@@ -64,7 +64,7 @@ djo booster search|add nome|list|create nome|pack|remove nome|verify   # código
 
 Um **booster** é código pronto em djo que o projeto chama pelo nome: `djo booster add markdown` (baixa do registro, confere o SHA256) e depois `markdown.render:texto`. Ele só enxerga o próprio código (nunca o do projeto), declara as permissões de que precisa e fica travado por SHA256 no `boosters.lock`. `djo booster create nome` gera a estrutura de um novo. Veja [Boosters](docs/12-boosters.md).
 
-`djo serve` usa `localhost:8080` por padrão. Com `-dev`, os erros aparecem na página. Com `-allow-private`, as páginas podem chamar endereços da rede local com `Http.get`. `-agent-conc` e `-agent-rate` limitam o tráfego de agentes para ele não atrapalhar as pessoas (veja [Agentes](docs/10-agentes.md)).
+`djo serve` usa `localhost:8080` por padrão. Com `-dev`, os erros aparecem na página. Com `-allow-private`, as páginas podem chamar endereços da rede local com `Http.get`. `-trusted-proxy` diz em quais proxies reversos confiar para o `Secure` dos cookies (veja [Web](docs/04-web.md#produção-atrás-de-um-proxy)). `-agent-conc` e `-agent-rate` limitam o tráfego de agentes para ele não atrapalhar as pessoas (veja [Agentes](docs/10-agentes.md)).
 
 ## Documentação
 

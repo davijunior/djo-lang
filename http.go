@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -112,11 +111,7 @@ func init() {
 		// Http.ip: endereço de quem fez a requisição
 		"ip": {0, func(in *Interp, env *Env, line int, a []any) any {
 			in.needWeb(line, "Http.ip")
-			host, _, err := net.SplitHostPort(in.req.RemoteAddr)
-			if err != nil {
-				return in.req.RemoteAddr
-			}
-			return host
+			return clientIP(in.req)
 		}},
 	} {
 		nativeNS("Http")[k] = v
