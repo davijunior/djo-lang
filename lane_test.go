@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -207,5 +208,22 @@ func TestHumanoNaoEntraNaPista(t *testing.T) {
 	}
 	if code, body, _ := req(t, ts, "/lista", map[string]string{"Accept": "text/html"}); code != 200 || !strings.HasPrefix(body, "tela") {
 		t.Errorf("a tela não pode esperar pelos agentes: %d %q", code, body)
+	}
+}
+
+func TestLaneTabelaCheiaDescartaOMaisAntigo(t *testing.T) {
+	l := newLane(4, 1)
+	now := time.Now()
+	for i := 0; i < 10000; i++ {
+		l.clients[fmt.Sprintf("ip%d", i)] = &bucket{tokens: 2, last: now.Add(time.Duration(i) * time.Millisecond)}
+	}
+	if !l.allow("novo", now.Add(time.Minute)) {
+		t.Fatal("cliente novo não pode ser recusado só porque a tabela está cheia")
+	}
+	if len(l.clients) != 10000 {
+		t.Errorf("tabela cresceu: %d", len(l.clients))
+	}
+	if _, ok := l.clients["ip0"]; ok {
+		t.Error("devia ter descartado o mais antigo (ip0)")
 	}
 }

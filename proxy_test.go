@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,9 +19,9 @@ func usarProxies(t *testing.T, v string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := trustedProxies
-	trustedProxies = list
-	t.Cleanup(func() { trustedProxies = old })
+	old, oldExp := trustedProxies, trustedExplicit
+	trustedProxies, trustedExplicit = list, strings.TrimSpace(v) != ""
+	t.Cleanup(func() { trustedProxies, trustedExplicit = old, oldExp })
 }
 
 func reqDe(remote, xfp string, comTLS bool) *http.Request {

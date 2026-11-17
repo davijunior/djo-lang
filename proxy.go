@@ -19,6 +19,12 @@ import (
 // trustedProxies é definida uma vez na partida (configureTrustedProxy); o padrão é o loopback.
 var trustedProxies = defaultTrustedProxies()
 
+// trustedExplicit: a lista foi escolhida pelo operador (-trusted-proxy ou DJO_TRUSTED_PROXY). Só então os
+// cabeçalhos de IP (X-Forwarded-For e X-Real-IP) valem: o padrão (loopback) confia apenas no
+// X-Forwarded-Proto, que é inofensivo. Um nginx que não sobrescreve X-Forwarded-For repassaria o que o
+// visitante escreveu, e o IP viraria o que ele quisesse.
+var trustedExplicit bool
+
 func defaultTrustedProxies() []netip.Prefix {
 	return []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128")}
 }
@@ -87,6 +93,7 @@ func configureTrustedProxy(flagValue string, flagSet bool) error {
 		return err
 	}
 	trustedProxies = list
+	trustedExplicit = strings.TrimSpace(v) != ""
 	return nil
 }
 
@@ -100,13 +107,7 @@ func fromTrustedProxy(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	a = a.Unmap().WithZone("")
-	for _, p := range trustedProxies {
-		if p.Contains(a) {
-			return true
-		}
-	}
-	return false
+	return isTrustedAddr(a.Unmap().WithZone(""))
 }
 
 // requestIsHTTPS: o visitante falou HTTPS? TLS direto, ou um proxy confiável disse "https"
@@ -120,4 +121,52 @@ func requestIsHTTPS(r *http.Request) bool {
 	}
 	first, _, _ := strings.Cut(r.Header.Get("X-Forwarded-Proto"), ",")
 	return strings.EqualFold(strings.TrimSpace(first), "https")
+}
+
+// clientIP é o IP do visitante. Sem lista configurada de forma explícita, ou fora dela, é o da conexão
+// (como sempre foi). Se a lista foi configurada e a conexão vem de um proxy dela, o IP real vem dos cabeçalhos que o proxy escreveu:
+//   - X-Forwarded-For: lido da direita para a esquerda; vale o primeiro endereço que não é de proxy
+//     confiável (o da esquerda pode ter sido forjado pelo visitante). Se esse endereço não é um IP
+//     válido, para e usa o da conexão (não pula para a esquerda, que é a parte forjável). Se a cadeia
+//     inteira é de proxies confiáveis, usa o da conexão.
+//   - X-Real-IP: só quando não há X-Forwarded-For, e só se for um IP válido.
+//
+// O endereço volta normalizado (IPv4 mapeado em IPv6 vira IPv4; sem zona).
+func clientIP(r *http.Request) string {
+	conn := connIP(r)
+	if !trustedExplicit || !fromTrustedProxy(r) {
+		return conn
+	}
+	if vals := r.Header.Values("X-Forwarded-For"); len(vals) > 0 {
+		var chain []string
+		for _, v := range vals {
+			chain = append(chain, strings.Split(v, ",")...)
+		}
+		for i := len(chain) - 1; i >= 0; i-- {
+			a, err := netip.ParseAddr(strings.TrimSpace(chain[i]))
+			if err != nil {
+				return conn
+			}
+			a = a.Unmap().WithZone("")
+			if !isTrustedAddr(a) {
+				return a.String()
+			}
+		}
+		return conn
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Real-IP")); v != "" {
+		if a, err := netip.ParseAddr(v); err == nil {
+			return a.Unmap().WithZone("").String()
+		}
+	}
+	return conn
+}
+
+func isTrustedAddr(a netip.Addr) bool {
+	for _, p := range trustedProxies {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
 }
