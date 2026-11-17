@@ -498,6 +498,7 @@ func (s *Server) runAction(w http.ResponseWriter, r *http.Request, t *routeTable
 	in.maxSteps = s.maxSteps
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
+	in.job = s.jobHost()
 	if err := in.loadCore(s.root); err != nil {
 		s.agentError(w, r, err)
 		return
@@ -551,15 +552,18 @@ func (s *Server) runAction(w http.ResponseWriter, r *http.Request, t *routeTable
 
 	prog := []Stmt{&VarStmt{Name: "resultado", Init: &Call{Name: rt.action, Args: args, Line: fd.Line}, Line: fd.Line}}
 	if err := in.Run(prog); err != nil {
+		in.jobDiscard()
 		s.agentError(w, r, err)
 		return
 	}
 	res, _ := in.global.get("resultado")
 	payload, err := encodeResult(res)
 	if err != nil {
+		in.jobDiscard()
 		s.agentError(w, r, err)
 		return
 	}
+	in.jobRelease()
 	h := w.Header()
 	for k, v := range in.resp.header {
 		h[k] = v

@@ -50,6 +50,7 @@ type Server struct {
 	lane         *lane // limites do tráfego de agentes
 	rcache       respCache
 	askx         askState
+	jobs         jobState // a fila de jobs (criada no primeiro uso)
 	mailSend     bool     // -dev: Mail.send envia de verdade em vez de gravar o .eml
 	mailBox      *mailBox // o djo spec: captura os e-mails
 	dbRoot       string   // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
@@ -74,6 +75,7 @@ func NewServer(dir string, dev bool) (*Server, error) {
 		return nil, err
 	}
 	srv := &Server{root: real, realRoot: real, dev: dev, maxSteps: 10_000_000, lane: newLane(0, 50)}
+	srv.jobs.owner, srv.jobs.workers = srv, -1
 	if _, err := srv.table(); err != nil {
 		return nil, err
 	}
@@ -108,6 +110,9 @@ func hidden(urlPath string) bool {
 		if strings.HasSuffix(strings.ToLower(urlPath), ext) {
 			return true // bancos de dados nunca são servidos
 		}
+	}
+	if strings.EqualFold(urlPath, "/agenda.djo") {
+		return true // a agenda de tarefas nunca é servida
 	}
 	if strings.EqualFold(urlPath, "/ask.djo") {
 		return true // a política do /ask nunca é servida
@@ -270,14 +275,17 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 	in.maxSteps = s.maxSteps
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
+	in.job = s.jobHost()
 	if err := in.loadCore(s.root); err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	if err := in.Run(prog); err != nil {
+		in.jobDiscard() // os jobs da página só valem se ela terminou sem erro
 		s.serverError(w, r, err)
 		return
 	}
+	in.jobRelease()
 
 	h := w.Header()
 	for k, v := range in.resp.header {
@@ -327,6 +335,7 @@ func serveCmd(args []string) int {
 	dev := fs.Bool("dev", false, "mostra os erros na própria página")
 	agentConc := fs.Int("agent-conc", 0, "máximo de requisições de agente em execução ao mesmo tempo (0 = 2 por núcleo)")
 	agentRate := fs.Float64("agent-rate", 50, "requisições de agente por segundo, por cliente (0 = sem limite)")
+	jobWorkers := fs.Int("jobs", -1, "quantos workers de Job rodam (padrão 2; 0 só enfileira)")
 	mailSend := fs.Bool("mail-send", false, "com -dev, Mail.send envia de verdade (por padrão grava o .eml em _saida/emails)")
 	allowPrivate := fs.Bool("allow-private", false, "deixa as páginas chamarem endereços internos (rede local) com Http.get/post")
 	if err := fs.Parse(args); err != nil {
@@ -343,8 +352,13 @@ func serveCmd(args []string) int {
 	}
 	srv.allowPrivate = *allowPrivate
 	srv.mailSend = *mailSend
+	if *jobWorkers < -1 || *jobWorkers > jobMaxWorkers {
+		fmt.Fprintf(os.Stderr, "-jobs vai de 0 a %d\n", jobMaxWorkers)
+		return 2
+	}
 	srv.lane = newLane(*agentConc, *agentRate)
 	srv.logger = log.New(os.Stderr, "", log.LstdFlags)
+	srv.jobsBoot(*jobWorkers) // depois do logger: o aviso de fila e de agenda inválida precisa aparecer
 
 	hs := &http.Server{
 		Addr:              *addr,
@@ -354,6 +368,7 @@ func serveCmd(args []string) int {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+	jobsDone := make(chan struct{})
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
@@ -361,6 +376,8 @@ func serveCmd(args []string) int {
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		hs.Shutdown(sctx)
+		srv.jobsShutdown(jobGrace)
+		close(jobsDone)
 	}()
 	fmt.Fprintf(os.Stderr, "djo servindo %s em http://%s (ctrl+c para parar)\n", srv.root, *addr)
 	if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -371,6 +388,7 @@ func serveCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	<-jobsDone // espera os jobs em andamento (até o prazo do desligamento)
 	return 0
 }
 

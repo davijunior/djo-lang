@@ -26,6 +26,7 @@ guarda em backup.
 
 - **Atualizar:** gere um app novo e troque o executável. Ao iniciar, ele nota a versão nova, substitui os
   arquivos do site e **mantém os dados** (tudo o que o app criou: `.db`, uploads, logs).
+- **Fila de jobs:** `Job.run` e o `agenda.djo` guardam a fila em `_dados/jobs.db`, na pasta de dados, e ela sobrevive às atualizações. `./blog jobs list` mostra e conserta a fila (veja [Jobs](16-jobs.md)).
 - **Outra pasta de dados:** `./blog -data /var/lib/blog` (ou a variável `DJO_DATA`).
 - **Versão:** `./blog version`.
 

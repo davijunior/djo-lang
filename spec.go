@@ -35,6 +35,7 @@ type specCtx struct {
 	lang   string
 	dbRoot string
 	mails  *mailBox
+	jobs   *specJobBox
 	server any // *Server, criado na primeira chamada de rota (spec_web.go)
 }
 
@@ -109,6 +110,47 @@ func init() {
 	// Spec.emails devolve os e-mails que o Mail.send "enviou" neste spec (nada sai de verdade).
 	ns["emails"] = builtin{0, func(in *Interp, env *Env, line int, a []any) any {
 		return need(in, "emails", line).mails.list()
+	}}
+	// Spec.jobs devolve os jobs que o Job.run enfileirou neste spec (nada roda sozinho).
+	ns["jobs"] = builtin{0, func(in *Interp, env *Env, line int, a []any) any {
+		return need(in, "jobs", line).jobs.list()
+	}}
+	// Spec.run_jobs executa, em ordem e de forma síncrona, os jobs enfileirados (inclusive os que eles criarem).
+	ns["run_jobs"] = builtin{0, func(in *Interp, env *Env, line int, a []any) any {
+		return specRunJobs(in, need(in, "run_jobs", line), 0, line)
+	}}
+	// Spec.run_job:id executa só esse job.
+	ns["run_job"] = builtin{1, func(in *Interp, env *Env, line int, a []any) any {
+		id, ok := a[0].(int64)
+		if !ok {
+			fail(line, "Spec.run_job espera o id (Int) que o Job.run devolveu")
+		}
+		return specRunJobs(in, need(in, "run_job", line), id, line)
+	}}
+	// Spec.agenda devolve a agenda (agenda.djo) do projeto.
+	ns["agenda"] = builtin{0, func(in *Interp, env *Env, line int, a []any) any {
+		c := need(in, "agenda", line)
+		defs, err := loadAgenda(c.root)
+		if err != nil {
+			fail(line, "Spec.agenda: %v", err)
+		}
+		out := &Array{}
+		for _, d := range defs {
+			m := newMap()
+			m.set("kind", d.kind)
+			m.set("expr", d.expr)
+			m.set("fn", d.fn)
+			m.set("tries", int64(d.tries))
+			m.set("timeout", int64(d.timeout/time.Second))
+			m.set("catch_up", d.catchUp)
+			var args any = newMap()
+			if v, err := jsonDecode(d.args); err == nil {
+				args = v
+			}
+			m.set("args", args)
+			out.Items = append(out.Items, m)
+		}
+		return out
 	}}
 	// Spec.skip:"motivo" marca o spec como pulado e para.
 	ns["skip"] = builtin{1, func(in *Interp, env *Env, line int, a []any) any {
@@ -251,6 +293,10 @@ func specMain(args []string, out, errw io.Writer) int {
 	}
 	root, files, err := specDiscover(target)
 	if err != nil {
+		fmt.Fprintln(errw, err)
+		return 2
+	}
+	if err := checkAgenda(root); err != nil {
 		fmt.Fprintln(errw, err)
 		return 2
 	}
@@ -523,7 +569,7 @@ func specRun(root, file string, prog []Stmt, fn, desc, lang string) (res specRes
 	in.maxSteps = specMaxSteps
 	in.deadline = time.Now().Add(specTimeout)
 	in.served = true
-	in.spec = &specCtx{root: root, file: file, lang: lang, dbRoot: tmp, mails: &mailBox{}}
+	in.spec = &specCtx{root: root, file: file, lang: lang, dbRoot: tmp, mails: &mailBox{}, jobs: &specJobBox{}}
 	defer in.closeTx()
 	defer func() {
 		if in.spec != nil {
