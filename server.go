@@ -329,7 +329,18 @@ func serveCmd(args []string) int {
 	agentRate := fs.Float64("agent-rate", 50, "requisições de agente por segundo, por cliente (0 = sem limite)")
 	mailSend := fs.Bool("mail-send", false, "com -dev, Mail.send envia de verdade (por padrão grava o .eml em _saida/emails)")
 	allowPrivate := fs.Bool("allow-private", false, "deixa as páginas chamarem endereços internos (rede local) com Http.get/post")
+	trusted := fs.String("trusted-proxy", "", "proxies confiáveis para X-Forwarded-Proto: IPs/CIDRs separados por vírgula, ou none (padrão: loopback; também DJO_TRUSTED_PROXY)")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	trustedSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "trusted-proxy" {
+			trustedSet = true
+		}
+	})
+	if err := configureTrustedProxy(*trusted, trustedSet); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
 	dir := "."

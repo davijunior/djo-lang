@@ -724,7 +724,7 @@ func askTable(b *strings.Builder, items *Array) {
 // listado em Ask.proxy, o X-Forwarded-For é lido: da direita para a esquerda, pula os proxies de confiança
 // e usa o primeiro que não é (o último IP não confiável da cadeia). Cadeia inválida = o IP da conexão.
 func askClientIP(r *http.Request, proxies []*net.IPNet) string {
-	conn := clientIP(r)
+	conn := connIP(r)
 	if len(proxies) == 0 {
 		return conn
 	}

@@ -128,7 +128,7 @@ func init() {
 				Path:     "/",
 				HttpOnly: true,
 				SameSite: http.SameSiteLaxMode,
-				Secure:   in.req.TLS != nil,
+				Secure:   requestIsHTTPS(in.req),
 			})
 			return nil
 		}},

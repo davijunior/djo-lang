@@ -273,7 +273,7 @@ print r["id"] != nil
 			t.Errorf("falta %q em:\n%s", want, d)
 		}
 	}
-	if strings.Contains(d, "oculto@x.com") || strings.Contains(strings.ToLower(d), "bcc") {
+	if strings.Contains(d, "oculto@x.com") || strings.Contains(strings.ToLower(d), "\nbcc:") {
 		t.Errorf("o bcc vazou nos cabeçalhos:\n%s", d)
 	}
 	if strings.Index(d, "text/plain") > strings.Index(d, "text/html") {

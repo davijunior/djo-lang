@@ -15,7 +15,7 @@ um programa que lê um sensor na porta serial. Recusa uma pasta que já tem arqu
 ## O servidor
 
 ```
-djo serve [-addr host:porta] [-dev] [pasta]
+djo serve [-addr host:porta] [-dev] [-trusted-proxy ips] [pasta]
 ```
 
 O mapeamento de URL para arquivo é igual ao do PHP:
@@ -164,7 +164,7 @@ Disponível só nas páginas servidas por `djo serve`.
 | `Http.json:`             | corpo lido como JSON (`nil` se inválido) |
 | `Http.file:"campo"`      | arquivo enviado: mapa `{name, size, type}`, ou `nil` |
 | `Http.upload:"campo":"pasta"` | grava o arquivo enviado e devolve o caminho, ou `nil` |
-| `Http.ip:`               | endereço de quem chamou |
+| `Http.ip:`               | IP de quem chamou (o real, atrás de um proxy confiável: veja [Produção atrás de um proxy](#produção-atrás-de-um-proxy)) |
 | `Http.get:url` `Http.post:url:corpo` ... | requisições de saída (veja abaixo) |
 | `Http.cookie:"nome"`     | cookie, ou `nil` |
 | `Http.setcookie:"nome":"valor"` | cria o cookie (`HttpOnly`, `SameSite=Lax`, `Secure` em HTTPS) |
@@ -249,6 +249,58 @@ digitadas por visitantes.
 
 Rodando um script direto (`djo arquivo.djo`), não há bloqueio nem limite de chamadas.
 
+## Produção atrás de um proxy
+
+É comum o nginx (ou Caddy, Traefik...) terminar o HTTPS e repassar o pedido em HTTP para a djo em
+`127.0.0.1:porta`. Sem ajuda, a djo vê uma conexão HTTP e os cookies (`djo_sid` e os de
+`Http.setcookie`) saem **sem `Secure`**. Para resolver, a djo lê o cabeçalho `X-Forwarded-Proto`, mas
+**só de um proxy confiável**: se a conexão não vem de um endereço da lista, o cabeçalho é ignorado
+(qualquer visitante poderia escrevê-lo).
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+As duas últimas linhas só importam para o IP do visitante (abaixo), mas deixe-as sempre: sem elas o nginx repassa o que o visitante escreveu.
+
+| Configuração | Efeito |
+|---|---|
+| (padrão) | confia no loopback: `127.0.0.0/8` e `::1`. É o caso do nginx na mesma máquina. |
+| `-trusted-proxy 10.0.0.0/8,192.168.1.7` | confia nesses IPs/CIDRs (proxy em outra máquina ou contêiner) |
+| `-trusted-proxy none` | não confia em ninguém: o cabeçalho nunca é lido |
+| `DJO_TRUSTED_PROXY=...` | o mesmo, pelo ambiente; a flag vence a variável |
+
+- Configure o proxy para **sobrescrever** o cabeçalho, como no exemplo (`proxy_set_header X-Forwarded-Proto $scheme;`), e não para anexar: a djo usa só o primeiro valor, e num cabeçalho anexado o primeiro é o que o visitante mandou.
+- Só o **primeiro** valor do cabeçalho conta e só `https` liga o `Secure`; `http`, lixo ou lista mal formada contam como HTTP.
+- `-trusted-proxy` com valor inválido faz a djo recusar a partida. Não existe curinga: `*`, `all` e prefixos muito largos (abaixo de `/8` em IPv4 ou `/16` em IPv6) são recusados, para ninguém confiar na internet inteira por engano.
+- Vale para `djo serve` e para o app gerado por `djo build` (que aceita a mesma flag e a mesma variável).
+- **Um site rodando sem proxy não muda**: com o padrão (loopback), um visitante de fora que mande `X-Forwarded-Proto` é ignorado. A única mudança é o `Secure` dos cookies atrás do proxy.
+
+### O IP do visitante atrás do proxy
+
+> **Atenção:** se o proxy não sobrescreve `X-Forwarded-For`, qualquer visitante forja o IP. Por isso a djo **só lê os cabeçalhos de IP quando você configura a lista** (`-trusted-proxy` ou `DJO_TRUSTED_PROXY`, mesmo que seja `127.0.0.1`). No padrão, `Http.ip` e o `-agent-rate` usam o IP da conexão, como sempre. Atualizar a djo não muda nada sozinho.
+
+Com a lista configurada, `Http.ip:` devolve o IP **real** do visitante, e não o do proxy (`127.0.0.1`). Isso importa
+para limites por IP (por exemplo, "5 mensagens por hora por IP"): sem isso, todos dividiriam a mesma cota.
+
+```nginx
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Real-IP $remote_addr;
+```
+
+- Os cabeçalhos são lidos só com a lista configurada **e** se a conexão vem de um endereço dela. Em qualquer outro caso (padrão, outro endereço, `-trusted-proxy none`) eles são ignorados, e `Http.ip` é o IP da conexão, como sempre foi.
+- **`X-Forwarded-For`** é lido **da direita para a esquerda**, e vale o primeiro endereço que não é de proxy confiável: o da esquerda pode ter sido escrito pelo visitante. Com vários proxies em cadeia, liste todos em `-trusted-proxy`. Se esse endereço não é um IP válido, a djo para e usa o IP da conexão.
+- **`X-Real-IP`** só é usado quando não há `X-Forwarded-For`. Use `$remote_addr` (o nginx sobrescreve o cabeçalho); se o seu proxy repassa o `X-Real-IP` do cliente sem trocar, não confie nele.
+- Valor que não é um IP é ignorado e `Http.ip` cai no IP da conexão. IPv6 funciona; `::ffff:1.2.3.4` vira `1.2.3.4`.
+- O **limite de agentes** (`-agent-rate`, veja [Agentes](10-agentes.md)) usa o mesmo IP: atrás de um proxy confiável ele passa a contar por visitante, e não mais um balde só para todos. Quem tinha ajustado `-agent-rate` para o total, pode reduzi-lo.
+- O `/ask` tem a sua própria lista (`Ask.proxy`), independente de `-trusted-proxy`.
+
 ## Sessões
 
 Dados do visitante guardados no servidor, ligados a um cookie (`djo_sid`: `HttpOnly`,
@@ -269,7 +321,7 @@ Dados do visitante guardados no servidor, ligados a um cookie (`djo_sid`: `HttpO
   o `id` do usuário e busque o resto no banco.
 - Limite de 64 KB por sessão e 10 mil sessões; expiram após 24 h sem uso.
 - As sessões ficam **na memória**: reiniciar o `djo serve` desloga todo mundo.
-- Atrás de um proxy HTTPS, o cookie não recebe `Secure` automaticamente.
+- Atrás de um proxy HTTPS, o cookie recebe `Secure` quando o proxy confiável manda `X-Forwarded-Proto: https` (veja [Produção atrás de um proxy](#produção-atrás-de-um-proxy)).
 
 ### Proteção CSRF
 
