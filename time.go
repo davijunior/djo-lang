@@ -22,7 +22,12 @@ func init() {
 			if ms > 3600*1000 {
 				fail(line, "Time.sleep: no máximo 1 hora por chamada")
 			}
-			if in.served {
+			if in.sleepMax > 0 { // job: espera até o timeout
+				if in.slept+ms > in.sleepMax {
+					fail(line, "Time.sleep: o job pode esperar no máximo %d segundos no total (o timeout)", in.sleepMax/1000)
+				}
+				in.slept += ms
+			} else if in.served {
 				if in.slept+ms > 2000 {
 					fail(line, "Time.sleep: páginas servidas podem esperar no máximo 2 segundos no total")
 				}

@@ -196,6 +196,9 @@ func runEmbedded(zr *zip.Reader, f *os.File, exe string, args []string) int {
 	if info.Mode == "run" {
 		return runFile(filepath.Join(dataDir, "main.djo"))
 	}
+	if len(rest) > 0 && rest[0] == "jobs" { // ./app jobs list: a fila do app, na pasta de dados
+		return jobsMain(append(append([]string(nil), rest[1:]...), dataDir), os.Stdout, os.Stderr)
+	}
 	if p := os.Getenv("PORT"); p != "" && !hasFlag(rest, "addr") {
 		rest = append([]string{"-addr", ":" + p}, rest...)
 	}

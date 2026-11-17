@@ -30,6 +30,7 @@ O mapeamento de URL para arquivo é igual ao do PHP:
   para pedaços reutilizáveis, e `_dados/` para arquivos gravados com `File`) e as pastas `core/` e `boosters/` também não.
 - `404.djo.html` na raiz personaliza a página de erro.
 - Sem `-dev`, erros de execução mostram só uma página genérica (o detalhe vai para o log).
+- `djo serve -jobs N` escolhe quantos workers de [Job](16-jobs.md) rodam (padrão 2; `0` só enfileira). O `agenda.djo` nunca é servido.
 - Com `-dev`, `Mail.send` não envia: grava o e-mail em `_saida/emails/` (`-mail-send` envia de verdade). Veja [E-mail](15-email.md).
 - Links simbólicos que saem da pasta do site são ignorados.
 
