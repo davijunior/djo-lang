@@ -64,7 +64,7 @@ djo booster search|add nome|list|create nome|pack|remove nome|verify   # código
 
 Um **booster** é código pronto em djo que o projeto chama pelo nome: `djo booster add markdown` (baixa do registro, confere o SHA256) e depois `markdown.render:texto`. Ele só enxerga o próprio código (nunca o do projeto), declara as permissões de que precisa e fica travado por SHA256 no `boosters.lock`. `djo booster create nome` gera a estrutura de um novo. Veja [Boosters](docs/12-boosters.md).
 
-`djo serve` usa `localhost:8080` por padrão. Com `-dev`, os erros aparecem na página. Com `-allow-private`, as páginas podem chamar endereços da rede local com `Http.get`. `-trusted-proxy` diz em quais proxies reversos confiar para o `Secure` dos cookies (veja [Web](docs/04-web.md#produção-atrás-de-um-proxy)). `-agent-conc` e `-agent-rate` limitam o tráfego de agentes para ele não atrapalhar as pessoas (veja [Agentes](docs/10-agentes.md)).
+`djo serve` usa `localhost:8080` por padrão. Com `-dev`, os erros aparecem na página. Com `-allow-private`, as páginas podem chamar endereços da rede local com `Http.get`. `-trusted-proxy` diz em quais proxies reversos confiar para o `Secure` dos cookies e para o IP real do visitante em `Http.ip` (veja [Web](docs/04-web.md#produção-atrás-de-um-proxy)). `-agent-conc` e `-agent-rate` limitam o tráfego de agentes para ele não atrapalhar as pessoas (veja [Agentes](docs/10-agentes.md)).
 
 ## Documentação
 
@@ -82,6 +82,8 @@ Um **booster** é código pronto em djo que o projeto chama pelo nome: `djo boos
 12. [Boosters](docs/12-boosters.md): código pronto que o projeto chama pelo nome (o primeiro é o `markdown`)
 13. [Fazendo uma API](docs/13-api.md): leituras, `action`s com `PUT`/`PATCH`/`DELETE`, token (`Http.bearer:`) e CORS
 14. [Testes](docs/14-testes.md): `djo spec`, funções `it_...` e o booster `expect`, com rotas chamadas em processo
+15. [E-mail](docs/15-email.md): `Mail.send` por SMTP, com TLS obrigatório
+16. [Jobs e agenda](docs/16-jobs.md): `Job.run` (tarefas depois da resposta) e `agenda.djo` (`Schedule.every`, `Schedule.cron`)
 
 Exemplos prontos em `exemplos/` (`exemplos/site/` é um site simples; `exemplos/blog/` tem login, banco e upload; `exemplos/api/` é uma API de tarefas com token e CORS, e tem `spec/` com os testes dela).
 
