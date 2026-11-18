@@ -9,6 +9,8 @@ match and or not pick struct sonof interface action super nocall`
 
 (`val` e `case` valem dentro do `match`.)
 
+(`promise`, `uniq`, `success`, `error` e `finally` valem só na posição de um promise e **não são reservadas**: `var error = 1` continua válido. Veja [Erros e promises](01-basico.md#erros-e-promises).)
+
 ## Funções que já vêm na linguagem
 
 Funções suas com o mesmo nome têm prioridade sobre as da linguagem.
@@ -71,6 +73,19 @@ var url = "/posts/" + (slug:titulo)
 ### Arquivos e includes
 
 `include:"arq"` executa outro arquivo da pasta do site. Veja `File` abaixo para ler e gravar.
+
+## Erros: `promise` e `reject:`
+
+| Forma | O que faz |
+|---|---|
+| `promise{ ... }success{ [x] ... }error{ [e] ... }finally{ ... }` | tenta o bloco; `success` se deu certo, `error` se deu erro, `finally` sempre (menos nos limites fatais) |
+| `uniq promise{ ... }...` | o mesmo, esperando o resultado ali mesmo |
+| `var p = promise{ ... }...` | o promise como valor: o `return` do `success` ou do `error` |
+| `return` dentro de um bloco do promise | termina aquele bloco com o valor (não sai da função) |
+| `reject:"mensagem"` ou `reject:"codigo":"mensagem":dados` | lança um erro; o código `"erro"` é reservado |
+| `reject:e` | relança o erro que o `error{ [e] }` recebeu |
+
+O erro do `error{ [e] }` é um mapa com `msg`, `line`, `code`, `data` e `file`. Passam direto, sem o `error` nem o `finally`: o limite de passos, o de tempo, o de chamadas `Http` por página ou job e a recursão sem fim. Passam pelo `finally`: `Job.give_up`, `redirect`, `Spec.fail` e `Spec.skip`. Tudo isso, com exemplos, em [Erros e promises](01-basico.md#erros-e-promises).
 
 ## Json
 
@@ -342,6 +357,9 @@ Todo erro traz a linha: `erro (linha 12): ...`. Os mais comuns:
 | `Spec.fail só existe quando os testes rodam com 'djo spec'` | `Spec` chamado fora do `djo spec` (veja [Testes](14-testes.md)) |
 | `o booster 'x' usa File mas não declarou essa permissão` | falta a permissão no `booster.json` (veja [Boosters](12-boosters.md)) |
 | `a página demorou demais` | passou do limite de passos |
+| `o promise não altera variáveis de fora ('x')` | atribuição a uma variável de fora, dentro de um promise: devolva o valor com `return` |
+| `'Session.set' altera a resposta ou a sessão da página` | `Session`, `redirect`, `status`, cabeçalhos ou cookies dentro de um promise |
+| `um promise precisa de success, error ou finally` | promise sem nenhuma cláusula, ou fora da ordem promise, success, error, finally |
 
 ## Ainda não existe
 

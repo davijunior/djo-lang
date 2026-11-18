@@ -289,6 +289,9 @@ func (in *Interp) methodCall(n *MethodCall, env *Env) any {
 				if b.args >= 0 && len(n.Args) != b.args {
 					fail(n.Line, "%s.%s espera %d argumento(s), recebeu %d", id.Name, n.Name, b.args, len(n.Args))
 				}
+				if in.prom > 0 {
+					in.promiseGuard(id.Name+"."+n.Name, n.Line)
+				}
 				args := make([]any, len(n.Args))
 				for i, a := range n.Args {
 					args[i] = in.eval(a, env)

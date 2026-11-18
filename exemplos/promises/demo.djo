@@ -1,0 +1,40 @@
+// djo exemplos/promises/demo.djo   (rode dentro desta pasta: cd exemplos/promises && djo demo.djo)
+// Sem Db nem Job: só o promise.
+f erp
+    params[pagina]
+    if
+        cond[pagina > 3]
+        reject:"erp_fora":"o ERP respondeu 503":{"status": 503}
+    return {"itens": [pagina, pagina * 10]}
+
+// Duas "chamadas" que começam uma depois da outra. Sem uniq não há garantia de ordem
+// entre promises; hoje o djo ainda roda um depois do outro.
+var a = promise{
+    print "buscando a página 1"
+    return erp:1
+}error{
+    [err]
+    return {"itens": [], "erro": err["msg"]}
+}
+var b = promise{
+    print "buscando a página 9"
+    return erp:9
+}error{
+    [err]
+    return {"itens": [], "erro": err["msg"]}
+}
+print "o primeiro uso espera:"
+print a["itens"]
+print b["erro"]
+
+uniq promise{
+    erp:5
+}success{
+    [d]
+    print d
+}error{
+    [err]
+    print "erro " + err["code"] + ": " + err["msg"] + " (status " + (str:err["data"]["status"]) + ")"
+}finally{
+    print "Finally!"
+}

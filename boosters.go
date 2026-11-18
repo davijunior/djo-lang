@@ -151,10 +151,10 @@ func (in *Interp) loadBoosters(root string) error {
 		dir := filepath.Join(base, e.Name())
 		m, err := readBoosterManifest(dir)
 		if err != nil {
-			return &djoError{0, boostersDir + "/" + e.Name() + ": " + err.Error()}
+			return &djoError{Line: 0, Msg: boostersDir + "/" + e.Name() + ": " + err.Error()}
 		}
 		if m.Nome != e.Name() {
-			return &djoError{0, fmt.Sprintf("%s/%s: o booster.json diz '%s', mas a pasta se chama '%s'", boostersDir, e.Name(), m.Nome, e.Name())}
+			return &djoError{Line: 0, Msg: fmt.Sprintf("%s/%s: o booster.json diz '%s', mas a pasta se chama '%s'", boostersDir, e.Name(), m.Nome, e.Name())}
 		}
 		b := &booster{name: m.Nome, version: m.Versao, desc: m.Descricao, perms: map[string]bool{},
 			funcs: map[string]*FuncDecl{}, priv: map[string]*FuncDecl{},
@@ -164,7 +164,7 @@ func (in *Interp) loadBoosters(root string) error {
 		}
 		files, err := boosterFiles(dir)
 		if err != nil {
-			return &djoError{0, boostersDir + "/" + e.Name() + ": " + err.Error()}
+			return &djoError{Line: 0, Msg: boostersDir + "/" + e.Name() + ": " + err.Error()}
 		}
 		if err := in.loadBoosterFiles(root, dir, files, b); err != nil {
 			return err
@@ -543,7 +543,7 @@ func (in *Interp) loadBoosterFiles(root, dir string, files []string, b *booster)
 			if !ok {
 				panic(r)
 			}
-			err = &djoError{de.Line, boostersDir + "/" + b.name + ": " + de.Msg}
+			err = &djoError{Line: de.Line, Msg: boostersDir + "/" + b.name + ": " + de.Msg}
 		}
 	}()
 	for _, f := range files {
@@ -556,7 +556,7 @@ func (in *Interp) loadBoosterFiles(root, dir string, files []string, b *booster)
 		}
 		internal := isBoosterCore(dir, f)
 		if rel, _ := filepath.Rel(dir, f); !internal && filepath.ToSlash(rel) != boosterMain {
-			return coreError(root, f, &djoError{0, "fora do core/ só existe o " + boosterMain + " (a API); mova este arquivo para o core/"})
+			return coreError(root, f, &djoError{Line: 0, Msg: "fora do core/ só existe o " + boosterMain + " (a API); mova este arquivo para o core/"})
 		}
 		for _, s := range prog {
 			switch d := s.(type) {
@@ -566,17 +566,17 @@ func (in *Interp) loadBoosterFiles(root, dir string, files []string, b *booster)
 					target = b.priv
 				}
 				if _, dup := b.funcs[d.Name]; dup {
-					return coreError(root, f, &djoError{d.Line, "a função '" + d.Name + "' já existe neste booster"})
+					return coreError(root, f, &djoError{Line: d.Line, Msg: "a função '" + d.Name + "' já existe neste booster"})
 				}
 				if _, dup := b.priv[d.Name]; dup {
-					return coreError(root, f, &djoError{d.Line, "a função '" + d.Name + "' já existe neste booster"})
+					return coreError(root, f, &djoError{Line: d.Line, Msg: "a função '" + d.Name + "' já existe neste booster"})
 				}
 				c := *d // a função vem do cache: não altere a original
 				c.Booster = b
 				target[d.Name] = &c
 			case *StructDecl:
 				if !internal {
-					return coreError(root, f, &djoError{d.Line, "structs ficam no core/ do booster; fora dele só valem funções (f)"})
+					return coreError(root, f, &djoError{Line: d.Line, Msg: "structs ficam no core/ do booster; fora dele só valem funções (f)"})
 				}
 				in.declare(d.Name, d.Line, d, nil)
 				for _, m := range d.Methods { // métodos também rodam dentro do booster
@@ -584,11 +584,11 @@ func (in *Interp) loadBoosterFiles(root, dir string, files []string, b *booster)
 				}
 			case *InterfaceDecl:
 				if !internal {
-					return coreError(root, f, &djoError{d.Line, "interfaces ficam no core/ do booster; fora dele só valem funções (f)"})
+					return coreError(root, f, &djoError{Line: d.Line, Msg: "interfaces ficam no core/ do booster; fora dele só valem funções (f)"})
 				}
 				in.declare(d.Name, d.Line, nil, d)
 			default:
-				return coreError(root, f, &djoError{lineOf(s), "um booster só declara f, struct e interface (estas só no core/); código solto não é permitido"})
+				return coreError(root, f, &djoError{Line: lineOf(s), Msg: "um booster só declara f, struct e interface (estas só no core/); código solto não é permitido"})
 			}
 		}
 	}

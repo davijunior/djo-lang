@@ -100,6 +100,28 @@ Gastas as tentativas, o job vai para `dead` com o erro (e a linha) guardado por 
 Se o processo cai no meio de um job, ele fica `running` com um *lease* (o `timeout` + 30 s). Passado o lease, a
 fila o devolve (ao subir e a cada 30 s), contando como tentativa.
 
+### Erros dentro do job: `promise`
+
+Um erro que **sobe** do job (sem `error`) conta como tentativa falha e o job repete. Para decidir, trate o erro num `promise` e use `Job.give_up` ou `reject:`:
+
+```
+f sincronizar
+    params[a[Map]]
+    uniq promise{
+        enviar_para_erp:a["id"]
+    }error{
+        [err]
+        if
+            cond[err["code"] == "erp_recusou"]
+            Job.give_up:"o ERP recusou o pedido"     // vai para dead, sem repetir
+        reject:err                                    // os outros erros: o job tenta de novo
+    }finally{
+        print "fim"                                   // roda antes de o give_up passar
+    }
+```
+
+Para forçar um erro num teste, use `reject:"teste":"falhou de propósito"` (no lugar de uma conta como `1 / 0`). Um `Job.run` feito dentro de um `promise` que falha é descartado; o chamado dentro de um que dá certo segue a regra de sempre (fica retido até a página ou o job terminar sem erro). Os 20 chamados `Http` por job valem para o job inteiro, dentro ou fora de promises. Veja [Erros e promises](01-basico.md#erros-e-promises).
+
 ## Onde fica a fila
 
 Num SQLite local: `_dados/jobs.db`, dentro da pasta do site. A pasta `_dados/` nunca é servida e, num app

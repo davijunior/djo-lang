@@ -121,7 +121,7 @@ A negação existe só em `not_eq`. Para negar os outros, confira uma condição
 | `Spec.fail:"mensagem"` | falha o teste e para (use para criar seus próprios matchers) |
 | `Spec.fail:{"mensagem": m, "esperado": e, "recebido": r}` | o mesmo, com esperado e recebido no relatório |
 | `Spec.skip:"motivo"` | marca o teste como pulado e para |
-| `Spec.try:"funcao":[args]` | chama uma função **do projeto** e devolve `{"ok", "value", "error", "line"}`; captura o erro de execução, mas deixa passar `Spec.fail` e `Spec.skip` |
+| `Spec.try:"funcao":[args]` | chama uma função **do projeto** e devolve `{"ok", "value", "error", "line", "code", "data", "file"}` (os três últimos, do erro, como no `promise`); captura o erro de execução, mas deixa passar `Spec.fail` e `Spec.skip` |
 | `Spec.emails:` | a lista dos e-mails que o `Mail.send` "enviou" neste teste (nada sai de verdade); veja [E-mail](15-email.md) |
 | `Spec.jobs:` `Spec.run_jobs:` `Spec.run_job:id` | os jobs que o `Job.run` enfileirou no teste (nada roda sozinho) e a execução síncrona deles; veja [Jobs](16-jobs.md) |
 | `Spec.agenda:` | a agenda do `agenda.djo` |
@@ -162,3 +162,17 @@ f ser_par
 ```
 
 (Só o `expect` precisa de permissão `Spec` no booster; no `core/` do projeto ou no arquivo de spec o `Spec` já está liberado.)
+
+## Testar um `promise`
+
+Dentro do `djo spec` o `promise` funciona como no resto da linguagem, e os promises rodam sempre em sequência. Para conferir o erro de uma função, o `expect.raises` continua valendo; para conferir o **código** ou os **dados** de um `reject:`, use o `Spec.try`:
+
+```
+f it_recusa_com_codigo
+    var r = Spec.try:"valor_em_centavos":["abc"]
+    expect.be_false:r["ok"]
+    expect.eq:r["code"]:"valor_invalido"
+    expect.eq:r["data"]["campo"]:"valor"
+```
+
+`exemplos/promises` tem specs de um promise com `Db.begin`, `Job.give_up` e `uniq` (`cd exemplos/promises && djo spec`).

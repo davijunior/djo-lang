@@ -1,0 +1,64 @@
+// Um "ERP" de mentira: a página 4 em diante responde com erro, e a 0 tem dado ruim.
+f erp_clientes
+    params[pagina]
+    if
+        cond[pagina > 3]
+        reject:"erp_fora":"o ERP respondeu 503":{"status": 503}
+    if
+        cond[pagina == 0]
+        var ruim = 1 / 0
+    return {"itens": [pagina, pagina * 10]}
+
+// promise como expressão: o valor é o return do success (ou do error)
+f buscar_pagina
+    params[pagina]
+    return promise{
+        return erp_clientes:pagina
+    }success{
+        [dados]
+        return dados
+    }error{
+        [err]
+        return {"itens": [], "erro": err["code"]}
+    }
+
+// uniq: espera o fim antes de continuar. O finally roda sempre.
+f sincronizar
+    params[pagina]
+    uniq promise{
+        erp_clientes:pagina
+    }error{
+        [err]
+        if
+            cond[err["code"] == "erp_fora"]
+            Job.give_up:"o ERP está fora, não adianta repetir"
+        reject:err
+    }finally{
+        Job.run:"registrar_tentativa":{"pagina": pagina}
+    }
+
+f sincronizar_job
+    params[a[Map]]
+    sincronizar:a["pagina"]
+
+f registrar_tentativa
+    params[a[Map]]
+    print "tentativa na página " + str:a["pagina"]
+
+// Db.begin dentro do promise: se falhar, a transação é desfeita
+f transferir
+    params[de, para, valor]
+    return uniq promise{
+        Db.begin:
+        Db.exec:"UPDATE contas SET saldo = saldo - ? WHERE id = ?":[valor, de]
+        if
+            cond[valor > 100]
+            reject:"limite":"acima do limite":{"limite": 100}
+        Db.exec:"UPDATE contas SET saldo = saldo + ? WHERE id = ?":[valor, para]
+        Db.commit:
+    }success{
+        return "transferido"
+    }error{
+        [err]
+        return "nada mudou: " + err["msg"]
+    }

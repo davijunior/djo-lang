@@ -235,7 +235,7 @@ type limitWriter struct {
 
 func (l *limitWriter) Write(p []byte) (int, error) {
 	if l.buf.Len()+len(p) > l.max {
-		panic(&djoError{0, "a página gerou saída grande demais"})
+		panic(&djoError{Line: 0, Msg: "a página gerou saída grande demais"})
 	}
 	return l.buf.Write(p)
 }
