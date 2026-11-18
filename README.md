@@ -79,11 +79,13 @@ Um **booster** é código pronto em djo que o projeto chama pelo nome: `djo boos
 9. [Empacotar](docs/09-empacotar.md): `djo build` gera um executável único com o seu site
 10. [Agentes](docs/10-agentes.md): `action`, rotas para agentes e o manifesto
 11. [Releases](docs/11-releases.md): instalar sem Go e publicar uma versão
-12. [Boosters](docs/12-boosters.md): código pronto que o projeto chama pelo nome (o primeiro é o `markdown`)
+12. [Boosters](docs/12-boosters.md): código pronto que o projeto chama pelo nome (os oficiais são o `markdown` e o `expect`)
 13. [Fazendo uma API](docs/13-api.md): leituras, `action`s com `PUT`/`PATCH`/`DELETE`, token (`Http.bearer:`) e CORS
 14. [Testes](docs/14-testes.md): `djo spec`, funções `it_...` e o booster `expect`, com rotas chamadas em processo
 15. [E-mail](docs/15-email.md): `Mail.send` por SMTP, com TLS obrigatório
 16. [Jobs e agenda](docs/16-jobs.md): `Job.run` (tarefas depois da resposta) e `agenda.djo` (`Schedule.every`, `Schedule.cron`)
+17. [O booster `markdown`](docs/17-booster-markdown.md): `markdown.render` e `markdown.codigo`, o que converte e o que não, e a segurança da saída
+18. [O booster `expect`](docs/18-booster-expect.md): os matchers do `djo spec`, as mensagens de falha e o idioma
 
 Exemplos prontos em `exemplos/` (`exemplos/site/` é um site simples; `exemplos/blog/` tem login, banco e upload; `exemplos/api/` é uma API de tarefas com token e CORS, e tem `spec/` com os testes dela).
 
