@@ -59,13 +59,13 @@ f render
         elif
             cond[starts:l:"### "]
             var t = slice:l:4
-            out = out + "<h3 id=\"" + (slug:t) + "\">" + (md_inline:t) + "</h3>\n"
+            out = out + "<h3 id=\"" + (md_slug:t) + "\">" + (md_inline:t) + "</h3>\n"
             i++
         elif
             cond[starts:l:"## "]
             var t = slice:l:3
-            push:toc:{"id": slug:t, "titulo": md_inline:t}
-            out = out + "<h2 id=\"" + (slug:t) + "\">" + (md_inline:t) + "</h2>\n"
+            push:toc:{"id": md_slug:t, "titulo": md_inline:t}
+            out = out + "<h2 id=\"" + (md_slug:t) + "\">" + (md_inline:t) + "</h2>\n"
             i++
         elif
             cond[starts:l:"# "]
