@@ -6,6 +6,8 @@
 
 f md_destino
     params[url[String]]
+    // endereço de fora (https://...) ou sem esquema (//host/...) fica como está: só o caminho relativo vira /docs/
+    if{ cond[(contains:url:":") or (starts:url:"//")] return url }
     if
         cond[ends:url:".md"]
         var nome = slice:url:0:(len:url) - 3
@@ -14,6 +16,19 @@ f md_destino
         if{ cond[(len:nome) > 3 and (slice:nome:2:3) == "-"] nome = slice:nome:3 }
         return "/docs/" + nome
     return url
+
+// O endereço de um link é seguro para ir no href? Sem ":" é caminho relativo ou âncora. Com ":", o que vem antes
+// dele (o esquema) só vale se for exatamente http, https ou mailto (sem maiúsculas escondendo, sem espaço,
+// tabulação ou outro caractere no meio: "java\tscript:" não é http). Antes de uma "/", "?" ou "#" não há esquema.
+
+f md_href_seguro
+    params[url[String]]
+    var u = trim:url
+    var p = index:u:":"
+    if{ cond[p < 0] return true }
+    var cabeca = lower:(slice:u:0:p)
+    if{ cond[(contains:cabeca:"/") or (contains:cabeca:"?") or (contains:cabeca:"#")] return true }
+    return cabeca == "http" or cabeca == "https" or cabeca == "mailto"
 
 // texto corrido: `código`, **negrito**, [texto](url). Tudo o mais é escapado.
 
@@ -72,7 +87,12 @@ f md_inline
                 cond[ok and k < n]
                 var rotulo = md_inline:(join:(slice:cs:(i + 1):j):"")
                 var url = join:(slice:cs:(j + 2):k):""
-                out = out + "<a href=\"" + (escape:(md_destino:url)) + "\">" + rotulo + "</a>"
+                if
+                    cond[md_href_seguro:url]
+                    out = out + "<a href=\"" + (escape:(md_destino:url)) + "\">" + rotulo + "</a>"
+                else
+                    // esquema perigoso (javascript:, data:...): fica só o texto do link, sem o endereço
+                    out = out + rotulo
                 i = k + 1
             else
                 out = out + "["
@@ -118,6 +138,6 @@ f md_numerada
 
 f md_inicio_bloco
     params[l[String]]
-    return starts:l:"```" or starts:l:"#" or starts:l:"|" or starts:l:"- " or (md_numerada:l) != nil or (len:(trim:l)) == 0
+    return starts:l:"```" or starts:l:"# " or starts:l:"## " or starts:l:"### " or starts:l:"|" or starts:l:"- " or (md_numerada:l) != nil or (len:(trim:l)) == 0
 
-// Devolve {"html": ..., "titulo": ..., "toc": [{"id", "titulo"}]}
+// (o render devolve {"html", "titulo", "titulo_html", "toc": [{"id", "titulo"}]}; veja main.djo)

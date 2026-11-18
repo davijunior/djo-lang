@@ -7,7 +7,7 @@ djo booster add expect        # uma vez por projeto (pede só a permissão Spec)
 djo spec                      # roda spec/**/*_spec.djo
 ```
 
-(O `expect` ainda não está no registro: enquanto isso, instale da pasta do código do djo com `djo booster add caminho/do/djo/boosters-oficiais/expect`.)
+O `expect` (versão 1.0.0) está no registro oficial. Todos os matchers, com exemplo e a mensagem de falha de cada um, estão em [O booster `expect`](18-booster-expect.md).
 
 ```
 // spec/soma_spec.djo

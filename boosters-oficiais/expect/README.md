@@ -4,7 +4,7 @@ Booster oficial do djo: os matchers do `djo spec`. Pede só a permissão `Spec` 
 
     djo booster add expect
 
-(Enquanto não estiver no registro: `djo booster add caminho/do/djo/boosters-oficiais/expect`.)
+(Para instalar da pasta do código do djo, sem o registro: `djo booster add caminho/do/djo/boosters-oficiais/expect`.)
 
 ```
 f it_soma
@@ -29,6 +29,6 @@ f it_erro
 
 Quando um matcher falha, ele chama `Spec.fail` com a mensagem, o esperado e o recebido, e o teste para. As mensagens saem em português, ou em inglês com `djo spec --lang en`.
 
-A API é o `main.djo`; o resto (comparação funda, texto das mensagens) fica em `core/` e é interno. Guia completo: [Testes](../../docs/14-testes.md).
+A API é o `main.djo`; o resto (comparação funda, texto das mensagens) fica em `core/` e é interno. Referência completa, com o exemplo e a mensagem de falha de cada matcher: [O booster expect](../../docs/18-booster-expect.md). O uso no `djo spec`: [Testes](../../docs/14-testes.md).
 
 Não funciona fora do `djo spec`: qualquer matcher chamado num script ou numa página dá o erro "Spec.fail só existe quando os testes rodam com 'djo spec'".
