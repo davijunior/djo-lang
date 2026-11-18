@@ -1,0 +1,59 @@
+f antes
+    Db.open:"hub.db"
+    Db.exec:"CREATE TABLE contas(id INTEGER, saldo INTEGER)"
+    Db.exec:"INSERT INTO contas VALUES (1, 500)"
+    Db.exec:"INSERT INTO contas VALUES (2, 0)"
+
+f saldo
+    params[id]
+    return (Db.one:"SELECT saldo FROM contas WHERE id = ?":[id])["saldo"]
+
+f it_valor_do_success
+    expect.eq:(buscar_pagina:2):{"itens": [2, 20]}
+
+f it_valor_do_error
+    expect.eq:(buscar_pagina:4):{"itens": [], "erro": "erp_fora"}
+
+f it_erro_do_proprio_djo_tem_code_erro
+    expect.eq:(buscar_pagina:0):{"itens": [], "erro": "erro"}
+
+f it_uniq_sem_erro_segue
+    sincronizar:1
+    expect.len:(Spec.jobs:):1
+
+f it_reject_relanca_e_o_finally_roda
+    var r = Spec.try:"sincronizar":[0]
+    expect.be_false:r["ok"]
+    expect.eq:r["code"]:"erro"
+    expect.len:(Spec.jobs:):1
+
+f it_give_up_passa_pelo_promise
+    Job.run:"sincronizar_job":{"pagina": 9}
+    var rs = Spec.run_jobs:
+    expect.be_false:rs[0]["ok"]
+    expect.include:rs[0]["error"]:"o ERP está fora"
+
+f it_db_begin_dentro_e_desfeito
+    expect.eq:(transferir:1:2:200):"nada mudou: acima do limite"
+    expect.eq:(saldo:1):500
+    expect.eq:(saldo:2):0
+
+f it_db_begin_dentro_e_confirmado
+    expect.eq:(transferir:1:2:50):"transferido"
+    expect.eq:(saldo:1):450
+    expect.eq:(saldo:2):50
+
+f it_job_criado_dentro_de_promise_que_falha_e_descartado
+    uniq promise{
+        Job.run:"registrar_tentativa":{"pagina": 1}
+        reject:"x":"falhou depois do Job.run"
+    }error{
+    }
+    expect.len:(Spec.jobs:):0
+
+f it_job_criado_dentro_de_promise_que_da_certo_fica
+    uniq promise{
+        Job.run:"registrar_tentativa":{"pagina": 1}
+    }success{
+    }
+    expect.len:(Spec.jobs:):1

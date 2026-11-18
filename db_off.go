@@ -10,6 +10,8 @@ type dbState struct{}
 
 func (in *Interp) closeTx() {}
 
+func (in *Interp) txOpen() bool { return false }
+
 func dbCloseUnder(dir string) {}
 
 func init() {

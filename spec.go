@@ -240,6 +240,11 @@ func (in *Interp) specTry(f func(), res *Map) {
 				res.set("ok", false)
 				res.set("error", e.Msg)
 				res.set("line", int64(e.Line))
+				em := errMap(e)
+				for _, k := range []string{"code", "data", "file"} {
+					v, _ := em.get(k)
+					res.set(k, v)
+				}
 			case haltSignal:
 				res.set("ok", true)
 			default:

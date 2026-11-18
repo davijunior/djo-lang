@@ -15,6 +15,10 @@ type Env struct {
 	vars   map[string]any
 	locked map[string]string // variável -> tipo travado (vem de params tipados)
 	parent *Env
+	// promise: uma visão "de fora". Lê (e guarda uma cópia funda) as variáveis de src;
+	// escrever nelas é erro (o promise devolve o resultado só pelo return).
+	outer bool
+	src   *Env
 }
 
 func newEnv(parent *Env) *Env {
@@ -26,8 +30,30 @@ func (e *Env) get(name string) (any, bool) {
 		if v, ok := c.vars[name]; ok {
 			return v, true
 		}
+		if c.src != nil {
+			if v, ok := c.src.get(name); ok {
+				v = deepCopy(v)
+				c.vars[name] = v
+				return v, true
+			}
+		}
 	}
 	return nil, false
+}
+
+// isOuter diz se o nome resolve para uma variável de fora de um promise.
+func (e *Env) isOuter(name string) bool {
+	for c := e; c != nil; c = c.parent {
+		if _, ok := c.vars[name]; ok {
+			return c.outer
+		}
+		if c.src != nil {
+			if _, ok := c.src.get(name); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type assignResult int
@@ -36,12 +62,21 @@ const (
 	assigned assignResult = iota
 	notFound
 	typeLocked
+	outerLocked // variável de fora de um promise
 )
 
 // assign respeita o tipo travado; devolve o tipo exigido quando recusa.
 func (e *Env) assign(name string, v any) (assignResult, string) {
 	for c := e; c != nil; c = c.parent {
+		if _, ok := c.vars[name]; !ok && c.src != nil {
+			if _, ok := c.src.get(name); ok {
+				return outerLocked, ""
+			}
+		}
 		if _, ok := c.vars[name]; ok {
+			if c.outer {
+				return outerLocked, ""
+			}
 			if typ, ok := c.locked[name]; ok {
 				cv, ok := coerce(typ, v)
 				if !ok {
@@ -83,12 +118,15 @@ type Interp struct {
 	outerLine       int                 // linha, no código do projeto, da última chamada a um booster
 	pStructs        map[string]*StructDecl
 	pIfaces         map[string]*InterfaceDecl
-	cur             *booster     // booster em execução (nil: core ou página)
-	job             *jobHost     // Job.run: onde enfileirar (nil fora do servidor e do djo spec)
-	sleepMax        int64        // >0: limite de Time.sleep em ms por execução (jobs)
-	outMax          int          // >0: limite de chamadas externas por execução (jobs)
-	schedLoad       *[]*schedDef // só enquanto o agenda.djo é lido
-	mail            *mailHost    // o que fazer com Mail.send numa página servida (nil: enviar de verdade)
+	cur             *booster         // booster em execução (nil: core ou página)
+	job             *jobHost         // Job.run: onde enfileirar (nil fora do servidor e do djo spec)
+	sleepMax        int64            // >0: limite de Time.sleep em ms por execução (jobs)
+	outMax          int              // >0: limite de chamadas externas por execução (jobs)
+	schedLoad       *[]*schedDef     // só enquanto o agenda.djo é lido
+	mail            *mailHost        // o que fazer com Mail.send numa página servida (nil: enviar de verdade)
+	promOuterTx     bool             // há Db.begin aberto fora do promise em execução
+	prom            int              // >0: dentro de um promise (não altera a resposta nem a sessão)
+	pend            []*promiseHandle // promises começados e ainda não entregues (fim da função/página)
 }
 
 const maxDepth = 2000
@@ -114,6 +152,7 @@ func (in *Interp) Run(prog []Stmt) (err error) {
 	}()
 	in.depth = 0
 	in.execBlock(prog, in.global)
+	in.awaitPending(0)
 	return nil
 }
 
@@ -140,18 +179,18 @@ func (in *Interp) tick() {
 	in.steps++
 	if in.maxSteps > 0 && in.steps > in.maxSteps {
 		if in.spec != nil {
-			fail(0, "o spec passou do limite de passos (um laço sem fim?) e foi interrompido")
+			failFatal(0, "o spec passou do limite de passos (um laço sem fim?) e foi interrompido")
 		}
 		if in.job != nil && in.job.inJob {
-			fail(0, "o job passou do limite de passos e foi interrompido")
+			failFatal(0, "o job passou do limite de passos e foi interrompido")
 		}
-		fail(0, "a página demorou demais e foi interrompida (limite de passos)")
+		failFatal(0, "a página demorou demais e foi interrompida (limite de passos)")
 	}
 	if in.steps&0x3ff == 0 && !in.deadline.IsZero() && time.Now().After(in.deadline) {
 		if in.job != nil && in.job.inJob && in.spec == nil {
-			fail(0, "o job passou do tempo limite (timeout) e foi interrompido")
+			failFatal(0, "o job passou do tempo limite (timeout) e foi interrompido")
 		}
-		fail(0, "o spec demorou demais e foi interrompido (limite de tempo)")
+		failFatal(0, "o spec demorou demais e foi interrompido (limite de tempo)")
 	}
 }
 
@@ -161,7 +200,7 @@ func (in *Interp) exec(s Stmt, env *Env) (any, bool) {
 	case *FuncDecl, *StructDecl, *InterfaceDecl:
 		// já registradas em execBlock
 	case *VarStmt:
-		v := in.eval(n.Init, env)
+		v := in.evalValue(n.Init, env)
 		if n.IsArr {
 			if _, ok := v.(*Array); !ok {
 				fail(n.Line, "'arr %s' precisa receber uma lista, mas recebeu %s", n.Name, typeName(v))
@@ -176,12 +215,14 @@ func (in *Interp) exec(s Stmt, env *Env) (any, bool) {
 		}
 		env.vars[n.Name] = v
 	case *AssignStmt:
-		v := in.eval(n.Value, env)
+		v := in.evalValue(n.Value, env)
 		if n.Member != nil {
+			in.checkOuterRoot(n.Member.X, env, n.Line)
 			in.setField(n.Member, v, env)
 			break
 		}
 		if n.Target != nil {
+			in.checkOuterRoot(n.Target.X, env, n.Line)
 			if m, ok := in.eval(n.Target.X, env).(*Map); ok {
 				m.set(mapKey(in.eval(n.Target.Idx, env), n.Line), v)
 				break
@@ -195,6 +236,8 @@ func (in *Interp) exec(s Stmt, env *Env) (any, bool) {
 			fail(n.Line, "variável '%s' não existe; declare com 'var %s = ...'", n.Name, n.Name)
 		case typeLocked:
 			fail(n.Line, "'%s' é %s e não pode receber %s", n.Name, typ, typeName(v))
+		case outerLocked:
+			fail(n.Line, outerMsg, n.Name)
 		}
 	case *IncStmt:
 		if n.Member != nil {
@@ -224,6 +267,8 @@ func (in *Interp) exec(s Stmt, env *Env) (any, bool) {
 		}
 		if res, typ := env.assign(n.Name, nv); res == typeLocked {
 			fail(n.Line, "'%s' é %s e não pode receber %s", n.Name, typ, typeName(nv))
+		} else if res == outerLocked {
+			fail(n.Line, outerMsg, n.Name)
 		}
 	case *WhileStmt:
 		loop := newEnv(env)
@@ -326,6 +371,10 @@ func (in *Interp) exec(s Stmt, env *Env) (any, bool) {
 		}
 		return in.eval(n.Value, env), true
 	case *ExprStmt:
+		if pe, ok := n.X.(*PromiseExpr); ok { // instrução: roda agora, entrega no fim da função
+			in.runStmtPromise(pe, env)
+			break
+		}
 		v := in.eval(n.X, env)
 		if in.Echo && in.depth == 0 && v != nil {
 			fmt.Fprintln(in.out, format(v))
@@ -400,7 +449,12 @@ func (in *Interp) eval(e Expr, env *Env) any {
 			}
 			fail(n.Line, "variável '%s' não existe", n.Name)
 		}
+		if h, isP := v.(*promiseHandle); isP {
+			return in.await(h)
+		}
 		return v
+	case *PromiseExpr:
+		return in.await(in.startPromise(n, env))
 	case *Logical:
 		if n.Op == Coalesce {
 			if l := in.eval(n.L, env); l != nil {
@@ -513,6 +567,9 @@ func (in *Interp) callBuiltin(b builtin, n *Call, env *Env) any {
 	if b.args >= 0 && len(n.Args) != b.args {
 		fail(n.Line, "'%s' espera %d argumento(s), recebeu %d", n.Name, b.args, len(n.Args))
 	}
+	if in.prom > 0 {
+		in.promiseGuard(n.Name, n.Line)
+	}
 	args := make([]any, len(n.Args))
 	for i, a := range n.Args {
 		args[i] = in.eval(a, env)
@@ -546,7 +603,7 @@ func (in *Interp) invoke(fd *FuncDecl, label string, args []Expr, env *Env, self
 	in.depth++
 	defer func() { in.depth-- }()
 	if in.depth > maxDepth {
-		fail(line, "recursão funda demais em '%s'", label)
+		failFatal(line, "recursão funda demais em '%s'", label)
 	}
 	if fd.Booster != nil { // os argumentos já foram avaliados fora do booster
 		prev, prevS, prevI := in.cur, in.structs, in.interfaces
@@ -554,9 +611,24 @@ func (in *Interp) invoke(fd *FuncDecl, label string, args []Expr, env *Env, self
 			in.outerLine, in.pStructs, in.pIfaces = line, prevS, prevI
 		}
 		in.cur, in.structs, in.interfaces = fd.Booster, fd.Booster.structs, fd.Booster.interfaces
-		defer func() { in.cur, in.structs, in.interfaces = prev, prevS, prevI }()
+		defer func() {
+			in.cur, in.structs, in.interfaces = prev, prevS, prevI
+			if r := recover(); r != nil { // o erro que nasce no booster diz de onde veio (o "file" do promise)
+				if de, ok := r.(*djoError); ok && de.File == "" {
+					de.File = boostersDir + "/" + fd.Booster.name
+				}
+				panic(r)
+			}
+		}()
 	}
+	mark := len(in.pend)
+	defer func() { // saiu por erro: os promises pendentes desta função se perdem
+		if len(in.pend) > mark {
+			in.pend = in.pend[:mark]
+		}
+	}()
 	ret, _ := in.execBlock(fd.Body, local)
+	in.awaitPending(mark)
 	return ret
 }
 

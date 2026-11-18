@@ -100,6 +100,9 @@ func (in *Interp) runner(fn string, line int) dbRunner {
 }
 
 // closeTx desfaz uma transação esquecida aberta (fim da página ou erro).
+// txOpen diz se há uma transação aberta (Db.begin sem commit).
+func (in *Interp) txOpen() bool { return in.dbs.tx != nil }
+
 func (in *Interp) closeTx() {
 	if in.dbs.tx != nil {
 		in.dbs.tx.Rollback()

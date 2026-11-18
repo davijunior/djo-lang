@@ -35,7 +35,8 @@ const (
 	jobMaxPerRun     = 100 // Job.run por página, action ou job
 	jobMaxSteps      = 50_000_000
 	jobOutMax        = 4 << 10
-	jobHTTPCalls     = 20
+	jobHTTPCalls     = 20  // chamadas Http por execução de job (o padrão do -jobs-http)
+	jobHTTPMax       = 200 // o teto do -jobs-http
 	jobMaxSpecRounds = 100
 	jobGrace         = 30 * time.Second // espera pelos jobs ao desligar
 )
@@ -94,6 +95,7 @@ func (st *jobState) backend() (jobBackend, error) {
 type jobHost struct {
 	back  func() (jobBackend, error)
 	held  []int64 // retidos até a página (ou o job pai) terminar sem erro
+	made  []int64 // todos os criados nesta execução (o ponto de salvamento do promise descarta os de dentro)
 	hold  bool    // true: página, action ou job; false: o spec chamando direto
 	inJob bool    // está executando um job (vale Job.give_up)
 	runs  int
@@ -117,6 +119,69 @@ func (h *jobHost) discard() {
 		be.discard(h.held)
 	}
 	h.held = nil
+}
+
+// mark e discardFrom são o ponto de salvamento do promise: descarta os retidos criados depois de mark.
+func (h *jobHost) mark() int {
+	if h == nil {
+		return 0
+	}
+	return len(h.made)
+}
+
+func (h *jobHost) discardFrom(n int) {
+	if h == nil || len(h.made) <= n {
+		return
+	}
+	gone := map[int64]bool{}
+	for _, id := range h.made[n:] {
+		gone[id] = true
+	}
+	if be, err := h.back(); err == nil {
+		be.discard(h.made[n:])
+	}
+	h.made = h.made[:n]
+	keep := h.held[:0]
+	for _, id := range h.held {
+		if !gone[id] {
+			keep = append(keep, id)
+		}
+	}
+	h.held = keep
+}
+
+// promiseJobMark / promiseJobDiscard: o ponto de salvamento do promise para os jobs. No djo spec
+// (sem retenção) os jobs entram direto na caixa do teste, então o ponto de salvamento é o tamanho dela.
+func (in *Interp) promiseJobMark() int {
+	if in.job != nil {
+		return in.job.mark()
+	}
+	if in.spec != nil && in.spec.jobs != nil {
+		return in.spec.jobs.size()
+	}
+	return 0
+}
+
+func (in *Interp) promiseJobDiscard(n int) {
+	if in.job != nil {
+		in.job.discardFrom(n)
+	} else if in.spec != nil && in.spec.jobs != nil {
+		in.spec.jobs.truncate(n)
+	}
+}
+
+func (b *specJobBox) size() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.items)
+}
+
+func (b *specJobBox) truncate(n int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.items) > n {
+		b.items = b.items[:n]
+	}
 }
 
 func (in *Interp) jobRelease() { in.job.release() }
@@ -351,6 +416,9 @@ func init() {
 			return nil
 		}
 		h.runs++
+		if !existed {
+			h.made = append(h.made, id)
+		}
 		if h.hold && !existed {
 			h.held = append(h.held, id)
 		}
@@ -590,13 +658,39 @@ func jobInvoke(in *Interp, name, argsJSON string) (err error, giveUp string, gav
 }
 
 // newJobInterp prepara o Interp onde um job roda: como uma requisição servida, mas sem requisição.
+// jobHTTPLimit é o limite de chamadas Http por execução de job (-jobs-http ou DJO_JOBS_HTTP).
+// É do servidor: o job não escolhe, para não aumentar o limite que o protege.
+var jobHTTPLimit = jobHTTPCalls
+
+// configureJobsHTTP aplica o -jobs-http: n vale se o flag foi passado; senão vale DJO_JOBS_HTTP; senão 20.
+func configureJobsHTTP(n int, flagSet bool, env string) error {
+	src := "-jobs-http"
+	if !flagSet {
+		env = strings.TrimSpace(env)
+		if env == "" {
+			jobHTTPLimit = jobHTTPCalls
+			return nil
+		}
+		v, err := strconv.Atoi(env)
+		if err != nil {
+			return fmt.Errorf("DJO_JOBS_HTTP precisa de um número inteiro de 1 a %d (veio %q)", jobHTTPMax, env)
+		}
+		n, src = v, "DJO_JOBS_HTTP"
+	}
+	if n < 1 || n > jobHTTPMax {
+		return fmt.Errorf("%s vai de 1 a %d chamadas Http por job (o padrão é %d; veio %d)", src, jobHTTPMax, jobHTTPCalls, n)
+	}
+	jobHTTPLimit = n
+	return nil
+}
+
 func newJobInterp(root, dbRoot string, w io.Writer, timeout time.Duration, host *jobHost) *Interp {
 	in := NewInterp(w)
 	in.root = root
 	in.dbRoot = dbRoot
 	in.served = true
 	in.maxSteps = jobMaxSteps
-	in.outMax = jobHTTPCalls
+	in.outMax = jobHTTPLimit
 	in.sleepMax = timeout.Milliseconds()
 	in.deadline = time.Now().Add(timeout)
 	in.job = host

@@ -6,6 +6,11 @@ import "fmt"
 type djoError struct {
 	Line int
 	Msg  string
+	// campos do promise/reject (zero para o erro comum)
+	Code  string // "" vale "erro"; o reject: pode dar outro
+	Data  any    // dados do reject:
+	File  string // "boosters/nome" quando o erro nasceu dentro de um booster
+	Fatal bool   // limites de proteção (passos, tempo, chamadas, recursão): o promise não captura
 }
 
 func (e *djoError) Error() string {
@@ -16,7 +21,12 @@ func (e *djoError) Error() string {
 }
 
 func fail(line int, format string, a ...any) {
-	panic(&djoError{line, fmt.Sprintf(format, a...)})
+	panic(&djoError{Line: line, Msg: fmt.Sprintf(format, a...)})
+}
+
+// failFatal é o fail dos limites que protegem o servidor: o promise não os captura.
+func failFatal(line int, format string, a ...any) {
+	panic(&djoError{Line: line, Msg: fmt.Sprintf(format, a...), Fatal: true})
 }
 
 type Expr interface{}

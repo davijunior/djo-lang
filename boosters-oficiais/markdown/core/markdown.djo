@@ -2,6 +2,33 @@
 // títulos, parágrafos, listas, tabelas, blocos de código, **negrito**,
 // `código` e [links](arquivo.md).
 
+// O id de um título, como o do GitHub: minúsculas, espaço vira "-", sai a pontuação ASCII (ficam as letras,
+// os números, "-" e "_"), e as letras com acento ficam: "Segurança" vira "segurança" e "O que mudou na 1.2.0"
+// vira "o-que-mudou-na-120". Assim o link [texto](#segurança) funciona no GitHub e no site.
+f md_slug
+    params[t[String]]
+    var s = lower:(trim:t)
+    var ok = "abcdefghijklmnopqrstuvwxyz0123456789-_"
+    var fora = "!\"#$%&'()*+,./:;<=>?@[\\]^`{|}~"
+    var saida = ""
+    var i = 0
+    var n = len:s
+    while{
+        cond[i < n]
+        var c = slice:s:i:(i + 1)
+        if
+            cond[contains:ok:c]
+            saida = saida + c
+        elif
+            cond[c == " "]
+            saida = saida + "-"
+        elif
+            cond[not (contains:fora:c) and c != "\t"]
+            saida = saida + c
+        i++
+    }
+    return saida
+
 // "04-web.md" vira "/docs/web"
 
 f md_destino

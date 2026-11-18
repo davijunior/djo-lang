@@ -388,11 +388,11 @@ func loadRoutes(root string) (*routeTable, error) {
 	if !isFile(file) {
 		return nil, nil
 	}
-	fail := func(line int, msg string) error { return &djoError{line, "rotas.djo: " + msg} }
+	fail := func(line int, msg string) error { return &djoError{Line: line, Msg: "rotas.djo: " + msg} }
 	prog, err := loadProgram(file)
 	if err != nil {
 		if de, ok := err.(*djoError); ok {
-			return nil, &djoError{de.Line, "rotas.djo: " + de.Msg}
+			return nil, &djoError{Line: de.Line, Msg: "rotas.djo: " + de.Msg}
 		}
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func loadRoutes(root string) (*routeTable, error) {
 	in.routes = &routeTable{}
 	if err := in.Run(prog); err != nil {
 		if de, ok := err.(*djoError); ok {
-			return nil, &djoError{de.Line, "rotas.djo: " + de.Msg}
+			return nil, &djoError{Line: de.Line, Msg: "rotas.djo: " + de.Msg}
 		}
 		return nil, err
 	}
