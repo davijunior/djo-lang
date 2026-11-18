@@ -81,7 +81,7 @@ distingue: mostra `"queued"`.
 
 - Num contexto novo, como uma requisição servida, mas **sem requisição**: `Http.bearer`, `Session` e `Route` não
   existem ali. `Db`, `File`, `Env`, `Mail` e `Http.get/post` funcionam, com as mesmas regras de sempre
-  (`Http`: até 20 chamadas por job; `File`: 10 MB gravados; `Time.sleep` espera no máximo o `timeout` do job, somando todas as chamadas).
+  (`Http`: até 20 chamadas por execução do job, ou o que o `-jobs-http` disser, veja [Limite de chamadas Http](#limite-de-chamadas-http); `File`: 10 MB gravados; `Time.sleep` espera no máximo o `timeout` do job, somando todas as chamadas).
 - Tem **limite de tempo** (`timeout`) e de passos. Estourou, a tentativa falha. O tempo limite interrompe um job
   que está **trabalhando** (um laço, por exemplo) com "o job passou do tempo limite (timeout)". Já um
   `Time.sleep` que passaria do `timeout` dá o erro de `Time.sleep` da tabela de erros, abaixo.
@@ -120,7 +120,7 @@ f sincronizar
     }
 ```
 
-Para forçar um erro num teste, use `reject:"teste":"falhou de propósito"` (no lugar de uma conta como `1 / 0`). Um `Job.run` feito dentro de um `promise` que falha é descartado; o chamado dentro de um que dá certo segue a regra de sempre (fica retido até a página ou o job terminar sem erro). Os 20 chamados `Http` por job valem para o job inteiro, dentro ou fora de promises. Veja [Erros e promises](01-basico.md#erros-e-promises).
+Para forçar um erro num teste, use `reject:"teste":"falhou de propósito"` (no lugar de uma conta como `1 / 0`). Um `Job.run` feito dentro de um `promise` que falha é descartado; o chamado dentro de um que dá certo segue a regra de sempre (fica retido até a página ou o job terminar sem erro). O limite de chamadas `Http` (20 por padrão) vale para a execução inteira do job, dentro ou fora de promises. Veja [Erros e promises](01-basico.md#erros-e-promises).
 
 ## Onde fica a fila
 
@@ -224,6 +224,22 @@ e o erro. Ele acontece uma vez só.
 - Um booster que chama `Job.run`, `Job.status` ou `Job.cancel` precisa declarar a permissão `"Job"` no
   `booster.json`. O `Schedule` só existe dentro do `agenda.djo`.
 
+## Limite de chamadas Http
+
+Um job pode fazer até **20 chamadas** `Http.get`/`Http.post` por execução (cada tentativa conta de novo). Quem administra o servidor muda esse número com a opção `-jobs-http` (ou a variável `DJO_JOBS_HTTP`), de **1 a 200**:
+
+```
+djo serve -jobs-http 100 meusite
+DJO_JOBS_HTTP=100 djo serve meusite
+```
+
+- O limite é **do servidor**, não do job: um job não pode pedir mais chamadas do que o servidor deixa (um limite que o próprio job pudesse subir não protegeria nada). Se as duas formas aparecerem, vale o `-jobs-http`.
+- Vale só para **jobs** (e para o que roda dentro deles, como um `promise`). A **página** e a **action** servidas continuam com o limite delas, de **5 chamadas**, que o `-jobs-http` não muda.
+- Um valor fora de 1 a 200, ou que não seja número, faz o `djo serve` recusar a subida com uma mensagem (código de saída 2).
+- Passar do limite é um erro que **não** se captura (nem com `promise`, e o `finally` não roda): `Http.get: no máximo 20 chamadas externas por job (quem administra o servidor muda isso com djo serve -jobs-http N, até 200)`. O job falha e repete como qualquer erro.
+- Cada chamada ainda tem o tempo máximo dela e o `timeout` do job corta o conjunto; 200 chamadas lentas não cabem em 60 s. Para sincronizar um ERP com muitas páginas, suba o `timeout` do job (até 15 min) junto com o `-jobs-http`, ou divida o trabalho em vários jobs (cada um com a sua cota), por exemplo um job por página.
+- No `djo spec` o `Http` não tem esse limite.
+
 ## Limites
 
 | | |
@@ -234,6 +250,7 @@ e o erro. Ele acontece uma vez só.
 | `Job.run` por página, action ou job | 100 |
 | `tries` | 1 a 10 (padrão 3) |
 | `timeout` | 1 s a 15 min (padrão 60 s) |
+| chamadas `Http` por execução de job | 1 a 200 (padrão 20), pelo `-jobs-http` |
 | workers | 0 a 16 (padrão 2) |
 | agendamentos no `agenda.djo` | 200 |
 | retenção | `done` 24 h, `dead` 30 dias |

@@ -35,7 +35,8 @@ const (
 	jobMaxPerRun     = 100 // Job.run por página, action ou job
 	jobMaxSteps      = 50_000_000
 	jobOutMax        = 4 << 10
-	jobHTTPCalls     = 20
+	jobHTTPCalls     = 20  // chamadas Http por execução de job (o padrão do -jobs-http)
+	jobHTTPMax       = 200 // o teto do -jobs-http
 	jobMaxSpecRounds = 100
 	jobGrace         = 30 * time.Second // espera pelos jobs ao desligar
 )
@@ -657,13 +658,39 @@ func jobInvoke(in *Interp, name, argsJSON string) (err error, giveUp string, gav
 }
 
 // newJobInterp prepara o Interp onde um job roda: como uma requisição servida, mas sem requisição.
+// jobHTTPLimit é o limite de chamadas Http por execução de job (-jobs-http ou DJO_JOBS_HTTP).
+// É do servidor: o job não escolhe, para não aumentar o limite que o protege.
+var jobHTTPLimit = jobHTTPCalls
+
+// configureJobsHTTP aplica o -jobs-http: n vale se o flag foi passado; senão vale DJO_JOBS_HTTP; senão 20.
+func configureJobsHTTP(n int, flagSet bool, env string) error {
+	src := "-jobs-http"
+	if !flagSet {
+		env = strings.TrimSpace(env)
+		if env == "" {
+			jobHTTPLimit = jobHTTPCalls
+			return nil
+		}
+		v, err := strconv.Atoi(env)
+		if err != nil {
+			return fmt.Errorf("DJO_JOBS_HTTP precisa de um número inteiro de 1 a %d (veio %q)", jobHTTPMax, env)
+		}
+		n, src = v, "DJO_JOBS_HTTP"
+	}
+	if n < 1 || n > jobHTTPMax {
+		return fmt.Errorf("%s vai de 1 a %d chamadas Http por job (o padrão é %d; veio %d)", src, jobHTTPMax, jobHTTPCalls, n)
+	}
+	jobHTTPLimit = n
+	return nil
+}
+
 func newJobInterp(root, dbRoot string, w io.Writer, timeout time.Duration, host *jobHost) *Interp {
 	in := NewInterp(w)
 	in.root = root
 	in.dbRoot = dbRoot
 	in.served = true
 	in.maxSteps = jobMaxSteps
-	in.outMax = jobHTTPCalls
+	in.outMax = jobHTTPLimit
 	in.sleepMax = timeout.Milliseconds()
 	in.deadline = time.Now().Add(timeout)
 	in.job = host

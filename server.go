@@ -338,16 +338,24 @@ func serveCmd(args []string) int {
 	jobWorkers := fs.Int("jobs", -1, "quantos workers de Job rodam (padrão 2; 0 só enfileira)")
 	mailSend := fs.Bool("mail-send", false, "com -dev, Mail.send envia de verdade (por padrão grava o .eml em _saida/emails)")
 	allowPrivate := fs.Bool("allow-private", false, "deixa as páginas chamarem endereços internos (rede local) com Http.get/post")
+	jobsHTTP := fs.Int("jobs-http", jobHTTPCalls, "máximo de chamadas Http por execução de job, de 1 a 200 (também DJO_JOBS_HTTP; as páginas têm limite próprio)")
 	trusted := fs.String("trusted-proxy", "", "proxies confiáveis para X-Forwarded-Proto: IPs/CIDRs separados por vírgula, ou none (padrão: loopback; também DJO_TRUSTED_PROXY)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	trustedSet := false
+	trustedSet, jobsHTTPSet := false, false
 	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "trusted-proxy" {
+		switch f.Name {
+		case "trusted-proxy":
 			trustedSet = true
+		case "jobs-http":
+			jobsHTTPSet = true
 		}
 	})
+	if err := configureJobsHTTP(*jobsHTTP, jobsHTTPSet, os.Getenv("DJO_JOBS_HTTP")); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
 	if err := configureTrustedProxy(*trusted, trustedSet); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
