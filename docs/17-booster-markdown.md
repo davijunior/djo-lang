@@ -21,7 +21,7 @@ Olá
 
 A API tem só duas funções, `render` e `codigo`. O resto (texto corrido, tabelas, listas, realce) é interno e não pode ser chamado de fora: `markdown.md_inline:x` dá `o booster markdown não tem a função 'md_inline'`.
 
-Esta página descreve o `markdown` **1.2.0**. **Leia a seção [Segurança](#segurança) antes de converter texto que não é seu** (comentários, textos de visitantes): o HTML cru é escapado e os links só aceitam endereços seguros, mas a saída entra na página e vale saber como usá-la. As mudanças em relação à 1.1.0 estão em [O que mudou na 1.2.0](#o-que-mudou-na-120).
+Esta página descreve o `markdown` **1.2.1**. **Leia a seção [Segurança](#segurança) antes de converter texto que não é seu** (comentários, textos de visitantes): o HTML cru é escapado e os links só aceitam endereços seguros, mas a saída entra na página e vale saber como usá-la. As mudanças em relação à 1.1.0 estão em [O que mudou na 1.2.0](#o-que-mudou-na-120) e [O que mudou na 1.2.1](#o-que-mudou-na-121).
 
 ## `markdown.render:texto`
 
@@ -52,9 +52,9 @@ print r["html"]
 
 ```
 Título do doc
-[{"id": "secao-um", "titulo": "Seção um"}]
+[{"id": "seção-um", "titulo": "Seção um"}]
 <p>Um parágrafo com <strong>negrito</strong>, <em>itálico</em>, <code>código</code> e um <a href="/docs/web">link</a>.</p>
-<h2 id="secao-um">Seção um</h2>
+<h2 id="seção-um">Seção um</h2>
 <h3 id="sub">Sub</h3>
 ```
 
@@ -198,7 +198,7 @@ A saída do `markdown` **entra na página**, então vale saber o que é escapado
 | O mapa `titulo` | **Não é escapado**, por contrato: é o texto puro do `# Título` (`# <b>x</b>` devolve `<b>x</b>`). Use `{{ }}` |
 | O mapa `titulo_html` | **Sim**, já é HTML seguro: `&lt;b&gt;x&lt;/b&gt;`. Use `{{! }}` |
 | O `titulo` de cada item do `toc` | já é HTML escapado (com `<em>` e `<code>`). Use `{{! }}` |
-| O atributo `id` dos títulos | passa pelo `slug` (só letras, números e `-`) |
+| O atributo `id` dos títulos | só letras, números, `-` e `_` (veja [Os ids dos títulos](#os-ids-dos-títulos)) |
 
 Um link que usaria `javascript:` não vira link. Entrada e saída reais:
 
@@ -229,6 +229,35 @@ Corrigiu três problemas da 1.1.0 e um comportamento:
 - **Links `.md` de fora** (`https://e.com/x.md`, `//e.com/x.md`) não são mais reescritos para `/docs/`.
 
 Quem usa o `markdown` 1.1.0 num site com Markdown de terceiros deve atualizar.
+
+## O que mudou na 1.2.1
+
+- **Os ids dos títulos seguem o GitHub.** Antes o `id` perdia os acentos e trocava cada pontuação por `-` (`Segurança` dava `seguranca`, `O que mudou na 1.2.0` dava `o-que-mudou-na-1-2-0`). Agora `Segurança` dá `segurança` e `O que mudou na 1.2.0` dá `o-que-mudou-na-120`. Com isso um link interno como `[veja](#segurança)` funciona **igual no GitHub e no site**. Se você tinha um link ou um favorito para o `id` antigo, atualize-o.
+
+## Os ids dos títulos
+
+O `id` de cada título `##` e `###` (e o `id` do `toc`) é feito do texto do título:
+
+- as letras viram minúsculas, **com os acentos** (`ç`, `ã`, `é` ficam);
+- o espaço vira `-`;
+- a pontuação ASCII some (o ponto, a vírgula, os dois-pontos, os parênteses, as crases...), e ficam as letras, os números, `-` e `_`.
+
+| Título | `id` |
+|---|---|
+| `Segurança` | `segurança` |
+| `O que mudou na 1.2.0` | `o-que-mudou-na-120` |
+| `O realce de código` | `o-realce-de-código` |
+| `Endereços de link aceitos` | `endereços-de-link-aceitos` |
+
+Dois títulos com o mesmo texto dão o **mesmo `id`** (o `markdown` não numera repetidos). Um `id` nunca leva aspas nem `<`, então não dá para sair do atributo.
+
+## O `<h1>` com `<code>`
+
+O `# Título` não vira `<h1>` no `html` devolvido: ele sai em `titulo` e `titulo_html`, e a página monta o `<h1>`. Num título que tem crases no texto, o `titulo` é texto puro e mostra as crases: `<h1>{{ r["titulo"] }}</h1>` escreve as crases como estão. Para o `<code>` aparecer, use o `titulo_html` com `{{! }}`:
+
+```
+<h1>{{! r["titulo_html"] }}</h1>
+```
 
 ## Um exemplo numa página real
 

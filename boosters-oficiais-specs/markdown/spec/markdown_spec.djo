@@ -59,7 +59,7 @@ f it_titulo_html_e_escapado
     var r = markdown.render:"# <b>T</b> & \"y\" `c`\n\n## <i>s</i>"
     expect.eq:r["titulo"]:"<b>T</b> & \"y\" `c`"
     expect.eq:r["titulo_html"]:"&lt;b&gt;T&lt;/b&gt; &amp; &#34;y&#34; <code>c</code>"
-    expect.eq:r["toc"]:[{"id": "i-s-i", "titulo": "&lt;i&gt;s&lt;/i&gt;"}]
+    expect.eq:r["toc"]:[{"id": "isi", "titulo": "&lt;i&gt;s&lt;/i&gt;"}]
 
 f it_sem_titulo
     var r = markdown.render:"so um paragrafo"
@@ -80,8 +80,8 @@ f it_md_relativo_vira_docs_e_o_de_fora_nao
 f it_exemplo_titulo_e_toc
     var r = markdown.render:"# Título do doc\n\nUm parágrafo com **negrito**, *itálico*, `código` e um [link](04-web.md).\n\n## Seção um\n\n### Sub"
     expect.eq:r["titulo"]:"Título do doc"
-    expect.eq:r["toc"]:[{"id": "secao-um", "titulo": "Seção um"}]
-    expect.eq:r["html"]:"<p>Um parágrafo com <strong>negrito</strong>, <em>itálico</em>, <code>código</code> e um <a href=\"/docs/web\">link</a>.</p>\n<h2 id=\"secao-um\">Seção um</h2>\n<h3 id=\"sub\">Sub</h3>\n"
+    expect.eq:r["toc"]:[{"id": "seção-um", "titulo": "Seção um"}]
+    expect.eq:r["html"]:"<p>Um parágrafo com <strong>negrito</strong>, <em>itálico</em>, <code>código</code> e um <a href=\"/docs/web\">link</a>.</p>\n<h2 id=\"seção-um\">Seção um</h2>\n<h3 id=\"sub\">Sub</h3>\n"
 
 f it_exemplo_listas_e_tabela
     var r = markdown.render:"- item a\n- item b\n  continua\n\n1. primeiro\n2. segundo\n\n| a | b |\n|---|---|\n| 1 | **2** |"
@@ -106,3 +106,20 @@ f render_qualquer
 
 f it_erro_de_tipo
     expect.raises:"render_qualquer":[42]:"deve ser String"
+
+// --- 4. os ids dos títulos são os do GitHub (1.2.1): letras com acento ficam, a pontuação sai ---
+
+f it_id_do_titulo_como_o_github
+    var r = markdown.render:"## Segurança\n\n## O que mudou na 1.2.0\n\n## O realce de `código`\n\n## Endereços de link aceitos\n\n### Ponto. E vírgula, (ok)?"
+    var ids = []
+    for{
+        each[t in r["toc"]]
+        push:ids:t["id"]
+    }
+    expect.eq:ids:["segurança", "o-que-mudou-na-120", "o-realce-de-código", "endereços-de-link-aceitos"]
+    expect.include:r["html"]:"<h3 id=\"ponto-e-vírgula-ok\">"
+
+f it_id_nao_sai_do_atributo
+    var r = markdown.render:"## a\" onclick=\"x <b>&</b>"
+    expect.be_false:(contains:r["html"]:"onclick=\"x")
+    expect.include:r["html"]:"<h2 id=\"a-onclick"
