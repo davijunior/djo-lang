@@ -1,6 +1,6 @@
 # Boosters
 
-Um **booster** é código pronto, escrito em djo, que o seu projeto chama pelo nome. O primeiro é o `markdown`, que converte Markdown em HTML.
+Um **booster** é código pronto, escrito em djo, que o seu projeto chama pelo nome. Os oficiais são o `markdown`, que converte Markdown em HTML ([guia](17-booster-markdown.md)), e o `expect`, os matchers do `djo spec` ([guia](18-booster-expect.md)).
 
 ## Usar
 
