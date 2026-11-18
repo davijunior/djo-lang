@@ -21,15 +21,15 @@ Olá
 
 A API tem só duas funções, `render` e `codigo`. O resto (texto corrido, tabelas, listas, realce) é interno e não pode ser chamado de fora: `markdown.md_inline:x` dá `o booster markdown não tem a função 'md_inline'`.
 
-**Leia a seção [Segurança](#segurança) antes de converter texto que não é seu** (comentários, textos de visitantes). O conversor escapa o HTML cru, mas **não filtra o esquema dos links** (`javascript:`), e há uma entrada que faz o `render` não terminar.
+Esta página descreve o `markdown` **1.2.0**. **Leia a seção [Segurança](#segurança) antes de converter texto que não é seu** (comentários, textos de visitantes): o HTML cru é escapado e os links só aceitam endereços seguros, mas a saída entra na página e vale saber como usá-la. As mudanças em relação à 1.1.0 estão em [O que mudou na 1.2.0](#o-que-mudou-na-120).
 
 ## `markdown.render:texto`
 
 | | |
 |---|---|
 | Parâmetro | `texto`: **String**. Qualquer outro tipo dá `erro (linha N): o parâmetro 'texto' de 'markdown.render' deve ser String, mas recebeu Int` |
-| Devolve | um mapa com três chaves: `html`, `titulo`, `toc` |
-| Texto vazio | `{"html": "", "titulo": "", "toc": []}` |
+| Devolve | um mapa com quatro chaves: `html`, `titulo`, `titulo_html`, `toc` |
+| Texto vazio | `{"html": "", "titulo": "", "titulo_html": "", "toc": []}` |
 | Limites | não há limite de tamanho. Um arquivo de 21 KB (a referência da djo) converte em cerca de 0,14 s |
 
 ### O mapa devolvido
@@ -37,7 +37,8 @@ A API tem só duas funções, `render` e `codigo`. O resto (texto corrido, tabel
 | Chave | Tipo | O que é |
 |---|---|---|
 | `html` | String | o corpo já em HTML, uma construção por linha, terminando em `\n`. **Não** inclui o `# Título` do documento |
-| `titulo` | String | o texto da **última** linha `# Título` do documento (cada `# ` troca o valor; só um deveria existir). Vazio se não houver. É **texto puro, sem escape**: no HTML, escreva com `{{ }}` (que escapa), nunca com `{{! }}` |
+| `titulo` | String | o texto da **última** linha `# Título` do documento (cada `# ` troca o valor; só um deveria existir). Vazio se não houver. É **texto puro, sem escape** (o que está escrito, com as crases e o `&`): no HTML, escreva com `{{ }}` (que escapa), nunca com `{{! }}` |
+| `titulo_html` | String | o mesmo título **já escapado e convertido** (`<code>`, `<em>`, `&amp;`), no formato do `titulo` de cada item do `toc`. Escreva com `{{! }}`. Novo na 1.2.0 |
 | `toc` | lista | um item por título `## ` (só o nível 2): `{"id": ..., "titulo": ...}`. O `titulo` do `toc` **já é HTML** (com `<em>`, `<code>`, `&amp;`): escreva com `{{! }}`. Os títulos `###` ficam no `html`, mas **não** entram no `toc` |
 
 Exemplo (entrada e saída reais):
@@ -103,7 +104,17 @@ print r["html"]
 
 ### Links para outros `.md`
 
-Um destino que **termina em `.md`** vira um caminho de `/docs/`: a pasta e o prefixo numérico são tirados (`04-web.md` → `/docs/web`, `../02-structs.md` → `/docs/structs`, `README.md` → `/docs/README`). Isto vale para **qualquer** destino que termine em `.md`, inclusive um endereço de fora: `https://e.com/x.md` vira `/docs/x`. Um destino com âncora (`docs/04-web.md#api`) **não** termina em `.md` e fica como está. Os demais destinos (`https://...`, `/pagina`, `#ancora`) passam sem mudar, só escapados.
+Um destino relativo que **termina em `.md`** vira um caminho de `/docs/`: a pasta e o prefixo numérico são tirados (`04-web.md` → `/docs/web`, `../02-structs.md` → `/docs/structs`, `README.md` → `/docs/README`). **Não** são reescritos os endereços de fora: os que têm esquema (`https://e.com/x.md`) e os que começam com `//` (`//e.com/x.md`) ficam como estão. Um destino com âncora (`docs/04-web.md#api`) não termina em `.md` e também fica. Os demais (`/pagina`, `#ancora`) passam sem mudar, só escapados.
+
+### Endereços de link aceitos
+
+O destino de um link só vira `<a href>` se for **seguro**:
+
+- **Aceitos:** `http:`, `https:` e `mailto:` (sem diferença entre maiúsculas e minúsculas: `HTTPS://X` vale), caminhos relativos (`pagina`, `/pagina`, `../a.md`), endereços sem esquema que começam com `//` e âncoras (`#secao`).
+- **Recusados:** qualquer outro esquema (`javascript:`, `data:`, `vbscript:`, `file:`...) e qualquer coisa que **tente esconder** o esquema (espaços, tabulação ou quebra de linha no meio, como `java<TAB>script:`; espaço no começo também). Um link recusado **não vira link**: sai só o texto dele (`[texto](javascript:x)` vira `texto`), sem aviso e sem erro.
+- O endereço de um link termina no **primeiro `)`**, então um endereço com parêntese dentro (como `a_(b)`) fica cortado ali.
+
+Um destino como `&#106;avascript:x` não vira script: o `&` é escapado (`href="&amp;#106;avascript:x"`), então o navegador lê o texto como um caminho relativo comum.
 
 ### O que NÃO é suportado
 
@@ -111,7 +122,7 @@ Estes casos **não dão erro**: a marcação sai como texto (escapado) ou, em al
 
 - Imagens `![alt](arquivo.png)`: sai `!` seguido de um link comum (`!<a href="a.png">alt</a>`).
 - Citação `> texto` e linha horizontal `---`: viram parágrafo (`<p>&gt; texto</p>`, `<p>---</p>`).
-- Título `####` ou mais fundo, e `#` sem espaço depois (`#etiqueta`): **travam o conversor** (veja [Segurança](#segurança)).
+- Título `####` ou mais fundo, e `#` sem espaço depois (`#etiqueta`): viram **parágrafo**, com o texto como está (`<p>#### x</p>`). O `render` nunca trava por causa disso (na 1.1.0 travava).
 - Lista com `*` ou `+`, lista aninhada, lista de tarefas `[ ]`: uma linha `  - b` depois de `- a` é lida como **continuação** do item (`- a\n  - b` vira um item `a - b`), e `* a` ou `+ c` viram parágrafo ou continuação.
 - Itálico com `_`, negrito com `__`, tachado `~~`: ficam como texto.
 - Link por referência (`[a][b]`), link automático (`<https://...>`), nota de rodapé, quebra de linha forçada.
@@ -183,28 +194,41 @@ A saída do `markdown` **entra na página**, então vale saber o que é escapado
 | Texto de parágrafos, itens, células e títulos (`html` e `toc`) | **Sim**. `<script>alert(1)</script>` sai `&lt;script&gt;alert(1)&lt;/script&gt;`, e `<b>x</b>` também |
 | Conteúdo de `` `código` `` e dos blocos de código | **Sim** |
 | Valor do `href` (as aspas viram `&#34;`, então não dá para sair do atributo) | **Sim** |
-| **Esquema do link** (`javascript:`, `data:`, `vbscript:`...) | **Não é filtrado** (exemplo logo abaixo) |
-| O mapa `titulo` | **Não é escapado** (é o texto do `# Título` como veio): `# <b>x</b>` devolve `<b>x</b>` |
-| O `titulo` de cada item do `toc` | já é HTML (já escapado e com `<em>`/`<code>`) |
+| Esquema do link (`javascript:`, `data:`, `vbscript:`...) | **Filtrado** desde a 1.2.0: só `http`, `https`, `mailto`, relativos e âncoras viram link (veja [Endereços de link aceitos](#endereços-de-link-aceitos)) |
+| O mapa `titulo` | **Não é escapado**, por contrato: é o texto puro do `# Título` (`# <b>x</b>` devolve `<b>x</b>`). Use `{{ }}` |
+| O mapa `titulo_html` | **Sim**, já é HTML seguro: `&lt;b&gt;x&lt;/b&gt;`. Use `{{! }}` |
+| O `titulo` de cada item do `toc` | já é HTML escapado (com `<em>` e `<code>`). Use `{{! }}` |
 | O atributo `id` dos títulos | passa pelo `slug` (só letras, números e `-`) |
 
-Exemplo real de link que passa (a entrada usa um `javascript:` com uma chamada entre crases):
+Um link que usaria `javascript:` não vira link. Entrada e saída reais:
 
 ```
-print (markdown.render:"[x](javascript:alert`1`)")["html"]
+print (markdown.render:"[x](javascript:alert`1`) e [ok](https://ex.com/a)")["html"]
 ```
 
 ```
-<p><a href="javascript:alert`1`">x</a></p>
+<p>x e <a href="https://ex.com/a">ok</a></p>
 ```
 
-Clicar nesse link executa o script. Por isso:
+Como usar com segurança:
 
-1. Escreva o `titulo` com `{{ r["titulo"] }}` (escapa) e o `html` e o `toc[i]["titulo"]` com `{{! ... }}` (já é HTML).
-2. **Para Markdown de visitantes** (comentários, perfis), **não use a saída direto**: filtre antes os links (aceite só `https://`, `http://`, `/` e `#`) ou remova-os. O conversor escapa HTML cru, mas um link `javascript:` ainda é um ataque.
-3. **O `render` pode não terminar.** Qualquer linha que comece com `#` e **não** seja `# `, `## ` ou `### ` (por exemplo `#### Título` ou `#etiqueta`) faz o conversor repetir o mesmo passo para sempre, e a página só sai pelo limite de passos ou de tempo do servidor, usando CPU (e memória) até lá. Com texto de visitante isso é uma negação de serviço fácil. Se o texto não é seu, **recuse ou troque** as linhas que começam com `#` além de `# `, `## ` e `### ` antes de converter. (Comportamento da versão 1.1.0.)
+1. Escreva o `titulo` com `{{ r["titulo"] }}` (que escapa) **ou** o `titulo_html` com `{{! r["titulo_html"] }}`. Nunca o `titulo` com `{{! }}`: ele pode ter `<` e `&` do texto original.
+2. Escreva o `html` e o `titulo` de cada item do `toc` com `{{! ... }}`: já são HTML.
+3. Com Markdown de visitantes (comentários, perfis), a saída já vem sem HTML cru e sem links de script. Mesmo assim, **só mostre links de visitantes se quiser que o site deles seja alcançável**: um link `https://` é um link, e o seu site passa a apontar para ele. Para evitar isso, não use o `html` direto e mostre o texto.
+4. Não há limite de tamanho no `render`: para texto de visitante, corte o tamanho antes (um arquivo de 21 KB converte em cerca de 0,14 s, e o tempo cresce com o texto).
 
 Os boosters sem permissão **não tocam o mundo** (arquivo, rede, banco), mas isso não os torna inofensivos: a saída vai para a página, como acima.
+
+## O que mudou na 1.2.0
+
+Corrigiu três problemas da 1.1.0 e um comportamento:
+
+- **O `render` não trava mais.** Na 1.1.0, uma linha começando com `#` que não fosse `# `, `## ` ou `### ` (como `#### x` ou `#etiqueta`) fazia o conversor repetir o mesmo passo para sempre. Agora essas linhas viram parágrafo, e nenhuma volta do laço deixa de avançar.
+- **Esquemas perigosos nos links são recusados** (`javascript:`, `data:`, `vbscript:`...): sai só o texto, sem link.
+- **`titulo_html`** é a versão escapada do título. O `titulo` continua texto puro, como na 1.1.0 (quem usa `{{ r["titulo"] }}` não precisa mudar nada).
+- **Links `.md` de fora** (`https://e.com/x.md`, `//e.com/x.md`) não são mais reescritos para `/docs/`.
+
+Quem usa o `markdown` 1.1.0 num site com Markdown de terceiros deve atualizar.
 
 ## Um exemplo numa página real
 
