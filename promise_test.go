@@ -308,7 +308,7 @@ reject:3
 
 func TestPromiseEntregaNaEspera(t *testing.T) {
 	runPromiseCases(t, []promiseCase{
-		{"print entra no primeiro uso", `
+		{"a saída entra onde o promise foi escrito", `
 var p = promise{
     print "a"
     return 1
@@ -320,7 +320,7 @@ var p = promise{
 print "c"
 print p
 print p
-`, "c\na\nb\n1\n1\n", ""},
+`, "a\nb\nc\n1\n1\n", ""},
 		{"uniq entrega na hora", `
 var p = uniq promise{
     print "a"
@@ -332,7 +332,7 @@ var p = uniq promise{
 print "c"
 print p
 `, "a\nc\n1\n", ""},
-		{"instrução sem uniq entrega no fim da função", `
+		{"instrução sem uniq: a saída fica no lugar", `
 f g
     promise{
         print "dentro"
@@ -342,7 +342,7 @@ f g
     print "corpo da função"
 g:
 print "fora"
-`, "corpo da função\ndentro\nok\nfora\n", ""},
+`, "dentro\nok\ncorpo da função\nfora\n", ""},
 		{"promise nunca lido: o erro sobe no fim da função", `
 f g
     var p = promise{
@@ -365,15 +365,15 @@ f g
     print "corpo"
 g:
 print "fim"
-`, "corpo\ntratado\nfim\n", ""},
-		{"fim da página entrega os pendentes", `
+`, "tratado\ncorpo\nfim\n", ""},
+		{"instrução na página: a saída fica no lugar", `
 promise{
     print "a"
 }success{
     print "b"
 }
 print "c"
-`, "c\na\nb\n", ""},
+`, "a\nb\nc\n", ""},
 		{"erro lido duas vezes sobe nas duas", `
 var p = promise{
     reject:"c":"ruim"
@@ -543,6 +543,7 @@ uniq promise{
 func TestPromisePassos(t *testing.T) {
 	prog, err := Parse(`
 uniq promise{
+    print "vazou?"
     while{
         cond[true]
         var x = 1
@@ -659,5 +660,249 @@ func TestPromiseEmTemplate(t *testing.T) {
 	}
 	if got := buf.String(); !strings.Contains(got, "<p>6</p>") || !strings.Contains(got, "<b>divisão por zero</b>") {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestPromiseSaidaNoLugarEDescartaEmErro(t *testing.T) {
+	runPromiseCases(t, []promiseCase{
+		{"A, dentro, success, B", `
+print "A"
+promise{
+    print "dentro"
+}success{
+    print "success"
+}
+print "B"
+`, "A\ndentro\nsuccess\nB\n", ""},
+		{"corpo imprime e falha: só o error aparece", `
+print "A"
+promise{
+    print "corpo"
+    var x = 1 / 0
+}success{
+    print "success"
+}error{
+    [e]
+    print "error"
+}
+print "B"
+`, "A\nerror\nB\n", ""},
+		{"success falha: o corpo do promise de fora, que falhou, perde a saída de tudo", `
+uniq promise{
+    uniq promise{
+        print "corpo"
+    }success{
+        print "success"
+        reject:"c":"quebrou no success"
+    }finally{
+        print "finally"
+    }
+}error{
+    [e]
+    print "tratado: " + e["msg"]
+}
+`, "tratado: quebrou no success\n", ""},
+		{"error falha: idem", `
+uniq promise{
+    uniq promise{
+        print "corpo"
+        var x = 1 / 0
+    }error{
+        print "error"
+        reject:"c":"quebrou no error"
+    }finally{
+        print "finally"
+    }
+}error{
+    [e]
+    print "fora: " + e["msg"]
+}
+`, "fora: quebrou no error\n", ""},
+		{"erro sobe sem error: o promise de fora trata e só o error dele aparece", `
+uniq promise{
+    uniq promise{
+        print "corpo"
+        var x = 1 / 0
+    }finally{
+        print "finally"
+    }
+}error{
+    print "pego"
+}
+`, "pego\n", ""},
+		{"finally imprime sempre", `
+uniq promise{
+    print "corpo"
+}finally{
+    print "f1"
+}
+uniq promise{
+    var x = 1 / 0
+}error{
+}finally{
+    print "f2"
+}
+`, "corpo\nf1\nf2\n", ""},
+		{"aninhado: o promise de dentro de um corpo que falha se perde", `
+uniq promise{
+    uniq promise{
+        print "interno"
+    }success{
+        print "interno ok"
+    }
+    var x = 1 / 0
+}error{
+    print "tratado"
+}
+`, "tratado\n", ""},
+		{"aninhado que dá certo aparece na ordem", `
+uniq promise{
+    print "1"
+    promise{
+        print "2"
+    }success{
+        print "3"
+    }
+    print "4"
+}success{
+    print "5"
+}
+print "6"
+`, "1\n2\n3\n4\n5\n6\n", ""},
+		{"expressão var p: a saída fica na declaração", `
+print "A"
+var p = promise{
+    print "dentro"
+    return 7
+}success{
+    [d]
+    print "success"
+    return d
+}
+print "B"
+print p
+`, "A\ndentro\nsuccess\nB\n7\n", ""},
+		{"return promise: a saída fica no lugar", `
+f g
+    print "antes"
+    return promise{
+        print "dentro"
+        return 1
+    }success{
+        [d]
+        return d
+    }
+print g:
+`, "antes\ndentro\n1\n", ""},
+		{"dentro de função chamada", `
+f g
+    uniq promise{
+        print "x"
+        reject:"c":"falhou"
+    }error{
+        print "tratado"
+    }
+    print "depois"
+print "A"
+g:
+print "B"
+`, "A\ntratado\ndepois\nB\n", ""},
+		{"o erro que sobe da página não deixa saída do promise", `
+print "A"
+uniq promise{
+    print "corpo"
+    var x = 1 / 0
+}success{
+}
+`, "", "divisão por zero"},
+	})
+}
+
+func TestPromiseSaidaNoJob(t *testing.T) {
+	prog, err := Parse(`f tarefa
+    uniq promise{
+        print "corpo"
+        var x = 1 / 0
+    }error{
+        print "error"
+    }finally{
+        print "finally"
+    }
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	in := NewInterp(&buf)
+	if err := in.Run(prog); err != nil {
+		t.Fatal(err)
+	}
+	if err, _, _ := jobInvoke(in, "tarefa", "{}"); err != nil {
+		t.Fatal(err)
+	}
+	if buf.String() != "error\nfinally\n" {
+		t.Fatalf("%q", buf.String())
+	}
+}
+
+func TestPromiseSaidaEmTemplateNoLugar(t *testing.T) {
+	prog, err := ParseTemplate("A {% promise{ %}dentro {% }success{ %}ok {% } %}B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	if err := NewInterp(&buf).Run(prog); err != nil {
+		t.Fatal(err)
+	}
+	if buf.String() != "A dentro ok B" {
+		t.Fatalf("%q", buf.String())
+	}
+}
+
+// Quando o erro sobe do promise e ninguém o trata dentro de outro promise, a saída que sobra é
+// a do finally (a do corpo, do success e do error some).
+func TestPromiseErroQueSobeSoDeixaOFinally(t *testing.T) {
+	for name, src := range map[string]string{
+		"corpo falha": `print "A"
+uniq promise{
+    print "corpo"
+    var x = 1 / 0
+}success{
+    print "success"
+}error{
+    print "error"
+    reject:e2:"x"
+}finally{
+    print "finally"
+}
+`,
+		"success falha": `print "A"
+uniq promise{
+    print "corpo"
+}success{
+    print "success"
+    reject:"c":"no success"
+}finally{
+    print "finally"
+}
+`,
+		"sem error": `print "A"
+uniq promise{
+    print "corpo"
+    var x = 1 / 0
+}finally{
+    print "finally"
+}
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := run(t, src)
+			if err == nil {
+				t.Fatal("o erro devia subir")
+			}
+			if out != "A\nfinally\n" {
+				t.Fatalf("saída %q, esperado %q", out, "A\nfinally\n")
+			}
+		})
 	}
 }

@@ -272,14 +272,33 @@ Também passam, e o `finally` ainda roda antes: `Job.give_up`, `redirect` e `Spe
 
 **Ponto de salvamento.** Se o `promise` falha, o que ele **abriu** é desfeito: uma transação aberta com `Db.begin` dentro dele leva `rollback`, e os jobs que ele enfileirou com `Job.run` são descartados. O que foi feito antes do `promise` continua valendo, e o que já saiu para o mundo (um e-mail, um `Http.post`) não volta.
 
-### `uniq` e a ordem
+### A saída, os erros e `uniq`
 
-`promise` sem `uniq` **não dá garantia de ordem** em relação ao resto do código: a djo pode vir a rodá-lo ao mesmo tempo que ele. **Hoje ainda é sequencial**: cada promise roda inteiro, na hora, um depois do outro. Mesmo assim o resultado só chega no momento de usar o valor:
+**A saída (`print`) de um promise entra na página no lugar onde ele foi escrito**, na ordem do código:
 
-- a **saída** (`print`) de um promise, e o erro que ele deu e ninguém tratou, só aparecem na **espera**: o primeiro uso da variável (`print p`, `p["x"]`, passá-la a uma função) ou o fim da função (da página, da `action`, do job) que o criou;
-- um promise nunca fica solto: ele termina antes de a função sair.
+```
+print "A"
+promise{
+    print "dentro"
+}success{
+    print "success"
+}
+print "B"
+```
 
-`uniq promise{ ... }` **espera o promise se resolver antes de continuar**: roda e entrega o resultado ali mesmo. Use `uniq` quando a ordem importa.
+A saída é `A`, `dentro`, `success`, `B`. Vale para o promise como instrução, para `var p = promise{...}` e para `return promise{...}`.
+
+**Se der erro, a saída do que falhou não aparece.** É a mesma ideia do ponto de salvamento do banco:
+
+- Se o **corpo** falha, o que ele imprimiu antes da falha é descartado. O `error{}` e o `finally{}` imprimem normalmente (é o tratamento).
+- Se um erro **vai subir** do promise (sem `error`, ou porque o `success`, o `error` ou o `finally` falharam), a saída do corpo, do `success` e do `error` é descartada. **Só a do `finally` fica**, porque ele roda sempre.
+- Um promise dentro do corpo de outro que falha perde a saída junto com o corpo.
+- Num limite fatal (passos, tempo, `Http`, recursão), nada do promise aparece: a página já termina em erro.
+- A regra é a mesma dentro de função, de job (o log do job) e de `action`, e com `uniq`.
+
+**Ordem.** A ordem da **saída** é sempre a do código. A ordem de **execução** é outra história: `promise` sem `uniq` **não dá garantia de ordem** em relação ao resto do código, porque a djo pode vir a rodá-lo ao mesmo tempo que ele. **Hoje ainda é sequencial**: cada promise roda inteiro, na hora, um depois do outro. O que muda é só o resultado, que chega na **espera**: o primeiro uso da variável (`print p`, `p["x"]`, passá-la a uma função) ou o fim da função (da página, da `action`, do job) que o criou. Um erro que ninguém tratou também sobe só na espera, e um promise nunca fica solto: ele termina antes de a função sair.
+
+`uniq promise{ ... }` **espera o promise se resolver antes de continuar**: roda e entrega o resultado (e o erro) ali mesmo. Use `uniq` quando a ordem de execução importa.
 
 ```
 var a = promise{
@@ -289,7 +308,7 @@ var a = promise{
     return 0
 }
 print "meio"
-print a          // a saída é: meio, buscando A, 1
+print a          // a saída é: buscando A, meio, 1
 
 uniq promise{
     print "agora"

@@ -7,8 +7,9 @@ f erp
         reject:"erp_fora":"o ERP respondeu 503":{"status": 503}
     return {"itens": [pagina, pagina * 10]}
 
-// Duas "chamadas" que começam uma depois da outra. Sem uniq não há garantia de ordem
-// entre promises; hoje o djo ainda roda um depois do outro.
+// Duas "chamadas" que começam uma depois da outra. Sem uniq não há garantia de ordem de
+// execução entre promises; hoje o djo ainda roda um depois do outro. A saída (print) sai
+// sempre no lugar onde o promise foi escrito.
 var a = promise{
     print "buscando a página 1"
     return erp:1

@@ -9,8 +9,9 @@ import (
 // promise{ corpo }success{ [x] ... }error{ [e] ... }finally{ ... }
 //
 // Fase 1: tudo roda em sequência, mas com a semântica pensada para a concorrência (fase 2):
-//   - o promise roda no ponto em que aparece, com a saída (print) guardada num buffer;
-//   - o resultado (valor, saída, erro) só é ENTREGUE na espera: o primeiro uso da variável
+//   - o promise roda no ponto em que aparece; a saída (print) entra na página nesse lugar, e
+//     se um erro vai subir dela, a do corpo, do success e do error é descartada (só a do finally fica);
+//   - o resultado (valor e erro) só é ENTREGUE na espera: o primeiro uso da variável
 //     ou o fim da função (da página, da action, do job) que o criou;
 //   - o bloco enxerga uma cópia das variáveis de fora e não escreve nelas (Env.outer/src);
 //   - não altera a resposta nem a sessão da página (promiseGuard);
@@ -37,7 +38,6 @@ type PromiseExpr struct {
 // promiseHandle é um promise já executado e ainda não entregue.
 type promiseHandle struct {
 	in        *Interp
-	out       []byte
 	val       any
 	sig       any // erro (*djoError) ou sinal (give_up, Spec.fail...) que sobe na espera
 	delivered bool
@@ -212,9 +212,7 @@ func errMap(e *djoError) *Map {
 
 func (in *Interp) startPromise(pe *PromiseExpr, env *Env) *promiseHandle {
 	h := &promiseHandle{in: in}
-	var buf bytes.Buffer
 	savedOut, savedGlobal, savedTx := in.out, in.global, in.promOuterTx
-	in.out = &buf
 	view := &Env{vars: map[string]any{}, locked: map[string]string{}, outer: true, src: env}
 	in.global = &Env{vars: map[string]any{}, locked: map[string]string{}, outer: true, src: savedGlobal}
 	in.prom++
@@ -236,7 +234,20 @@ func (in *Interp) startPromise(pe *PromiseExpr, env *Env) *promiseHandle {
 		return r
 	}
 
-	sig := in.guard(func() { val = runBlock(pe.Body, newEnv(view)) })
+	// A saída de cada parte vai para um buffer; no fim, o que vale entra na página, no lugar
+	// onde o promise foi escrito (veja o fim desta função).
+	capture := func(f func()) string {
+		var b bytes.Buffer
+		prev := in.out
+		in.out = &b
+		defer func() { in.out = prev }()
+		f()
+		return b.String()
+	}
+	var bodyOut, succOut, errOut, finOut string
+	var sig any
+	bodyOut = capture(func() { sig = in.guard(func() { val = runBlock(pe.Body, newEnv(view)) }) })
+	bodyOK := sig == nil
 	if sig != nil { // ponto de salvamento: desfaz o que o bloco abriu
 		if !txBefore && in.txOpen() {
 			in.closeTx()
@@ -246,27 +257,47 @@ func (in *Interp) startPromise(pe *PromiseExpr, env *Env) *promiseHandle {
 			in.pend = in.pend[:pendMark]
 		}
 	}
-	runClause := func(c *Clause, arg any) {
+	runClause := func(c *Clause, arg any) string {
 		val = nil
-		sig = in.guard(func() {
-			e := newEnv(view)
-			if c.Param != "" {
-				e.vars[c.Param] = arg
-			}
-			val = runBlock(c.Body, e)
+		return capture(func() {
+			sig = in.guard(func() {
+				e := newEnv(view)
+				if c.Param != "" {
+					e.vars[c.Param] = arg
+				}
+				val = runBlock(c.Body, e)
+			})
 		})
 	}
 	if sig == nil && pe.Succ != nil {
-		runClause(pe.Succ, val)
+		succOut = runClause(pe.Succ, val)
 	} else if de, ok := sig.(*djoError); ok && pe.Err != nil {
-		runClause(pe.Err, errMap(de))
+		errOut = runClause(pe.Err, errMap(de))
 	}
 	if pe.Fin != nil {
-		if fsig := in.guard(func() { runBlock(pe.Fin.Body, newEnv(view)) }); fsig != nil {
-			sig = fsig // o erro do finally vence o que estava pendente
-		}
+		finOut = capture(func() {
+			if fsig := in.guard(func() { runBlock(pe.Fin.Body, newEnv(view)) }); fsig != nil {
+				sig = fsig // o erro do finally vence o que estava pendente
+			}
+		})
 	}
-	h.out, h.val, h.sig = buf.Bytes(), val, sig
+	h.val, h.sig = val, sig
+	// A saída entra na página AGORA, que é o lugar onde o promise foi escrito (na fase 2 esta
+	// posição será reservada no começo e preenchida aqui). Se um erro vai subir do promise, a
+	// saída do corpo, do success e do error é descartada; só a do finally fica. Se o corpo
+	// falhou e o error tratou, a saída do corpo se perde e a do error aparece.
+	var final string
+	if sig == nil {
+		if bodyOK {
+			final += bodyOut
+		}
+		final += succOut + errOut
+	}
+	final += finOut
+	if final != "" {
+		in.out = savedOut
+		io.WriteString(savedOut, final)
+	}
 	in.pend = append(in.pend, h)
 	return h
 }
@@ -277,9 +308,6 @@ func (in *Interp) await(h *promiseHandle) any {
 		h.delivered = true
 		if n := len(in.pend); n > 0 && in.pend[n-1] == h {
 			in.pend = in.pend[:n-1]
-		}
-		if len(h.out) > 0 {
-			io.WriteString(in.out, string(h.out))
 		}
 	}
 	if h.sig != nil {
@@ -297,9 +325,6 @@ func (in *Interp) awaitPending(mark int) {
 			continue
 		}
 		h.delivered = true
-		if len(h.out) > 0 {
-			io.WriteString(in.out, string(h.out))
-		}
 		if h.sig != nil {
 			panic(h.sig)
 		}
