@@ -724,7 +724,7 @@ func loadAsk(root string) (*askConfig, error) {
 	prog, err := Parse(string(src))
 	if err != nil {
 		if de, ok := err.(*djoError); ok {
-			return nil, &djoError{de.Line, "ask.djo: " + de.Msg}
+			return nil, &djoError{Line: de.Line, Msg: "ask.djo: " + de.Msg}
 		}
 		return nil, err
 	}
@@ -739,7 +739,7 @@ func loadAsk(root string) (*askConfig, error) {
 			ok = isID && id.Name == "Ask"
 		}
 		if !ok {
-			return nil, &djoError{lineOf(s), "ask.djo: só aceita chamadas Ask.type:, Ask.level:, Ask.deny:, Ask.alias:, Ask.limits: e Ask.reply:"}
+			return nil, &djoError{Line: lineOf(s), Msg: "ask.djo: só aceita chamadas Ask.type:, Ask.level:, Ask.deny:, Ask.alias:, Ask.limits: e Ask.reply:"}
 		}
 	}
 	in := NewInterp(io.Discard)
@@ -750,24 +750,24 @@ func loadAsk(root string) (*askConfig, error) {
 	in.ask = newAskConfig()
 	if err := in.Run(prog); err != nil {
 		if de, ok := err.(*djoError); ok {
-			return nil, &djoError{de.Line, "ask.djo: " + de.Msg}
+			return nil, &djoError{Line: de.Line, Msg: "ask.djo: " + de.Msg}
 		}
 		return nil, err
 	}
 	if len(in.ask.typeOrder) == 0 {
-		return nil, &djoError{1, "ask.djo: declare ao menos um Ask.type"}
+		return nil, &djoError{Line: 1, Msg: "ask.djo: declare ao menos um Ask.type"}
 	}
 	if in.ask.levelFrom != "" {
 		fd := in.funcs[in.ask.levelFrom]
 		if fd == nil || fd.Action || len(fd.Params) != 0 {
-			return nil, &djoError{1, "ask.djo: Ask.level_from \"" + in.ask.levelFrom + "\" precisa ser uma função (não action) do core/ sem parâmetros; ela lê o pedido com Http.bearer: e devolve \"public\", \"agent\" ou \"admin\""}
+			return nil, &djoError{Line: 1, Msg: "ask.djo: Ask.level_from \"" + in.ask.levelFrom + "\" precisa ser uma função (não action) do core/ sem parâmetros; ela lê o pedido com Http.bearer: e devolve \"public\", \"agent\" ou \"admin\""}
 		}
 	}
 	if len(in.ask.levels) == 0 {
-		return nil, &djoError{1, "ask.djo: declare ao menos um Ask.level (sem nível liberado, nada é consultável)"}
+		return nil, &djoError{Line: 1, Msg: "ask.djo: declare ao menos um Ask.level (sem nível liberado, nada é consultável)"}
 	}
 	if in.ask.dbName == "" {
-		return nil, &djoError{1, "ask.djo: declare Ask.db com o banco que o /ask consulta, como Ask.db:\"site.db\""}
+		return nil, &djoError{Line: 1, Msg: "ask.djo: declare Ask.db com o banco que o /ask consulta, como Ask.db:\"site.db\""}
 	}
 	return in.ask, nil
 }

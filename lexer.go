@@ -207,14 +207,14 @@ func Lex(src string) ([]Token, error) {
 					case '\\':
 						sb.WriteRune('\\')
 					default:
-						return nil, &djoError{line, fmt.Sprintf("escape inválido '\\%c' na string", e)}
+						return nil, &djoError{Line: line, Msg: fmt.Sprintf("escape inválido '\\%c' na string", e)}
 					}
 					continue
 				}
 				sb.WriteRune(ch)
 			}
 			if !closed {
-				return nil, &djoError{l, "string sem fechar"}
+				return nil, &djoError{Line: l, Msg: "string sem fechar"}
 			}
 			push(STRING, sb.String(), l, c, f)
 
@@ -238,7 +238,7 @@ func Lex(src string) ([]Token, error) {
 			}
 			k, ok := oneKinds[r]
 			if !ok {
-				return nil, &djoError{l, fmt.Sprintf("caractere inesperado '%c'", r)}
+				return nil, &djoError{Line: l, Msg: fmt.Sprintf("caractere inesperado '%c'", r)}
 			}
 			adv()
 			push(k, string(r), l, c, f)

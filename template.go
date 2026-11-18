@@ -49,7 +49,7 @@ func ParseTemplate(src string) ([]Stmt, error) {
 
 		end := strings.Index(src[i+2:], closer)
 		if end < 0 {
-			return nil, &djoError{line, fmt.Sprintf("'%s' sem '%s' para fechar", open, closer)}
+			return nil, &djoError{Line: line, Msg: fmt.Sprintf("'%s' sem '%s' para fechar", open, closer)}
 		}
 		inner := src[i+2 : i+2+end]
 		startLine := line
@@ -67,7 +67,7 @@ func ParseTemplate(src string) ([]Stmt, error) {
 				return nil, err
 			}
 			if len(ptoks) == 0 {
-				return nil, &djoError{startLine, "'{{ }}' vazio"}
+				return nil, &djoError{Line: startLine, Msg: "'{{ }}' vazio"}
 			}
 			toks = append(toks, Token{Kind: TplEcho, Text: kind, Line: startLine, First: true})
 			ptoks[0].First = false
@@ -104,7 +104,7 @@ func lexPiece(src string, startLine int) ([]Token, error) {
 	toks, err := Lex(src)
 	if err != nil {
 		if de, ok := err.(*djoError); ok {
-			return nil, &djoError{de.Line + startLine - 1, de.Msg}
+			return nil, &djoError{Line: de.Line + startLine - 1, Msg: de.Msg}
 		}
 		return nil, err
 	}

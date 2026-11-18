@@ -43,7 +43,7 @@ func (in *Interp) loadCore(root string) error {
 			case *InterfaceDecl:
 				in.declare(d.Name, d.Line, nil, d)
 			default:
-				return coreError(root, f, &djoError{lineOf(s), "o core só declara funções, structs e interfaces (f, struct e interface); código solto não é permitido"})
+				return coreError(root, f, &djoError{Line: lineOf(s), Msg: "o core só declara funções, structs e interfaces (f, struct e interface); código solto não é permitido"})
 			}
 		}
 	}
@@ -54,11 +54,11 @@ func coreError(root, file string, err error) error {
 	rel, _ := filepath.Rel(root, file)
 	if de, ok := err.(*djoError); ok {
 		if de.Line == 0 {
-			return &djoError{0, rel + ": " + de.Msg}
+			return &djoError{Line: 0, Msg: rel + ": " + de.Msg}
 		}
-		return &djoError{de.Line, rel + ": " + de.Msg}
+		return &djoError{Line: de.Line, Msg: rel + ": " + de.Msg}
 	}
-	return &djoError{0, rel + ": " + err.Error()}
+	return &djoError{Line: 0, Msg: rel + ": " + err.Error()}
 }
 
 func lineOf(s Stmt) int {

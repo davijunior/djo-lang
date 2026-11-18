@@ -113,6 +113,22 @@ Db.commit:
 
 Se a página terminar (ou der erro) sem `commit`, a transação é desfeita sozinha.
 
+**Dentro de um `promise`.** Uma transação aberta com `Db.begin` **dentro** de um `promise` que falha é desfeita (`rollback`) antes de o `error` rodar:
+
+```
+uniq promise{
+    Db.begin:
+    Db.exec:"UPDATE contas SET saldo = saldo - ? WHERE id = ?":[10, 1]
+    reject:"limite":"acima do limite"
+    Db.commit:
+}error{
+    [err]
+    print "nada mudou: " + err["msg"]
+}
+```
+
+Uma transação aberta **antes** do `promise` não é tocada, e o promise **não pode usar o `Db`** enquanto ela estiver aberta (erro claro). No PostgreSQL, um erro de SQL numa transação aberta a deixa abortada ("current transaction is aborted"): quem captura esse erro com um promise **fora** da transação deve chamar `Db.rollback:` e abrir outra. (Esse caso de PostgreSQL não foi testado contra um servidor de verdade.) Veja [Erros e promises](01-basico.md#erros-e-promises).
+
 ## Paginação: `Db.page:`
 
 Para listas grandes, não traga tudo: `Db.page:` devolve uma página e diz se há mais.

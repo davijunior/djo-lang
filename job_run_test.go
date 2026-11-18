@@ -418,3 +418,128 @@ func TestJobRotaActionEnfileira(t *testing.T) {
 		t.Errorf("só o da action que deu certo fica: %v", n)
 	}
 }
+
+func TestPromisePaginaJobDeDentroQueFalhaEDescartado(t *testing.T) {
+	f := newJobSite(t, false, map[string]string{
+		"index.djo": `Job.run:"gravar":{"texto": "antes"}
+uniq promise{
+    Job.run:"gravar":{"texto": "dentro"}
+    var y = 1 / 0
+}error{
+    [e]
+    print "tratado: " + e["msg"]
+}
+`,
+	})
+	code, body := f.get(t, "/")
+	if code != 200 || body != "tratado: divisão por zero" {
+		t.Fatalf("%d %q", code, body)
+	}
+	// o de antes fica; o de dentro do promise que falhou foi descartado
+	if n := f.engine(t).q.counts(); n["queued"] != 1 || n["held"] != 0 {
+		t.Fatalf("%v", n)
+	}
+	f.runNext(t, time.Now())
+	if f.saida() != "antes\n" {
+		t.Errorf("%q", f.saida())
+	}
+}
+
+func TestPromisePaginaJobDeDentroQueDaCertoFica(t *testing.T) {
+	f := newJobSite(t, false, map[string]string{
+		"index.djo": `uniq promise{
+    Job.run:"gravar":{"texto": "dentro"}
+}success{
+}
+`,
+	})
+	if code, _ := f.get(t, "/"); code != 200 {
+		t.Fatalf("%d", code)
+	}
+	if n := f.engine(t).q.counts(); n["queued"] != 1 {
+		t.Fatalf("%v", n)
+	}
+}
+
+func TestPromisePaginaErroDepoisDoPromiseDescartaTudo(t *testing.T) {
+	f := newJobSite(t, false, map[string]string{
+		"index.djo": `uniq promise{
+    Job.run:"gravar":{"texto": "dentro"}
+}success{
+}
+var y = 1 / 0
+`,
+	})
+	if code, _ := f.get(t, "/"); code != 500 {
+		t.Fatalf("%d", code)
+	}
+	if n := f.engine(t).q.counts(); n["queued"]+n["held"] != 0 {
+		t.Fatalf("%v", n)
+	}
+}
+
+func TestPromiseNaPaginaNaoAlteraARespostaNemASessao(t *testing.T) {
+	f := newJobSite(t, false, map[string]string{
+		"index.djo": `uniq promise{
+    Session.set:"a":1
+}error{
+    [e]
+    print e["msg"]
+}
+uniq promise{
+    redirect:"/x"
+}error{
+    [e]
+    print e["msg"]
+}
+`,
+	})
+	code, body := f.get(t, "/")
+	if code != 200 || strings.Count(body, "altera a resposta ou a sessão") != 2 {
+		t.Fatalf("%d %q", code, body)
+	}
+}
+
+func TestPromiseJobGiveUpDentroDoPromiseVaiParaDead(t *testing.T) {
+	f := newJobSite(t, false, map[string]string{
+		"core/j.djo": jobCore + `
+f desiste_em_promise
+    uniq promise{
+        var x = 1 / 0
+    }error{
+        [e]
+        Job.give_up:"não adianta"
+    }finally{
+        File.append:"_dados/saida.txt":"finally\n"
+    }
+`,
+		"index.djo": `Job.run:"desiste_em_promise":{}`,
+	})
+	f.get(t, "/")
+	j := f.runNext(t, time.Now())
+	if j.state != "dead" || j.tries != 1 {
+		t.Fatalf("o give_up dentro do error devia ir direto para dead: %+v", j)
+	}
+	if f.saida() != "finally\n" {
+		t.Errorf("o finally roda antes de o give_up passar: %q", f.saida())
+	}
+}
+
+func TestPromiseJobErroSemErrorRepete(t *testing.T) {
+	f := newJobSite(t, false, map[string]string{
+		"core/j.djo": jobCore + `
+f falha_em_promise
+    uniq promise{
+        var x = 1 / 0
+    }finally{
+        File.append:"_dados/saida.txt":"finally\n"
+    }
+`,
+		"index.djo": `Job.run:"falha_em_promise":{}`,
+	})
+	f.get(t, "/")
+	j := f.runNext(t, time.Now())
+	if j.state != "queued" || j.tries != 1 {
+		t.Fatalf("o erro sobe e o job tenta de novo: %+v", j)
+	}
+}

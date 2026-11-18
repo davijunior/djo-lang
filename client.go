@@ -124,7 +124,7 @@ func (in *Interp) httpDo(method, fn string, a []any, line int) any {
 			max = in.outMax
 		}
 		if in.outCalls >= max {
-			fail(line, "%s: no máximo %d chamadas externas por página (ou job)", fn, max)
+			failFatal(line, "%s: no máximo %d chamadas externas por página (ou job)", fn, max)
 		}
 		in.outCalls++
 	}

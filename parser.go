@@ -11,6 +11,8 @@ type Parser struct {
 	pos    int
 	noCall int  // >0: dentro de argumento, 'nome:' não vira chamada
 	tpl    bool // lendo um template: blocos só com chaves
+	// dentro do finally{} de um promise o return não vale
+	noReturn bool
 }
 
 var validTypes = map[string]bool{"Map": true, "Int": true, "Float": true, "String": true, "Bool": true, "Arr": true, "Any": true, "Date": true, "DateTime": true}
@@ -122,6 +124,11 @@ func (b *block) stmts() []Stmt {
 
 func (p *Parser) parseStmt() Stmt {
 	switch t := p.peek(); t.Kind {
+	case IDENT:
+		if p.promiseAt(p.pos, true) {
+			return &ExprStmt{p.parsePromise()}
+		}
+		p.strayClause()
 	case TplText:
 		p.next()
 		return &EchoStmt{&StrLit{t.Text}, true}
@@ -178,6 +185,9 @@ func (p *Parser) parseSimple() Stmt {
 		}
 		return &PrintStmt{p.parseExpr()}
 	case KwReturn:
+		if p.noReturn {
+			fail(t.Line, "o return não vale dentro do finally (ele serve para limpar, não para decidir o valor)")
+		}
 		p.next()
 		nt := p.peek()
 		if nt.First || nt.Kind == EOF || nt.Kind == RBrace {
@@ -223,6 +233,9 @@ func (p *Parser) parseFunc() Stmt {
 	ft := p.next()
 	name := p.expect(IDENT, "nome da função")
 	fn := &FuncDecl{Name: name.Text, Line: ft.Line}
+	savedNR := p.noReturn
+	p.noReturn = false
+	defer func() { p.noReturn = savedNR }()
 	b := p.openBlock(ft)
 	if ft.Kind == KwAction {
 		fn.Action = true
@@ -722,6 +735,9 @@ func (p *Parser) startsArg() bool {
 }
 
 func (p *Parser) parsePrimary() Expr {
+	if p.promiseAt(p.pos, false) {
+		return p.parsePromise()
+	}
 	t := p.next()
 	switch t.Kind {
 	case INT:

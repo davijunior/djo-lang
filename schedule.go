@@ -262,7 +262,7 @@ func loadAgenda(root string) ([]*schedDef, error) {
 	}
 	wrap := func(err error) error {
 		if de, ok := err.(*djoError); ok {
-			return &djoError{de.Line, "agenda.djo: " + de.Msg}
+			return &djoError{Line: de.Line, Msg: "agenda.djo: " + de.Msg}
 		}
 		return err
 	}
@@ -281,7 +281,7 @@ func loadAgenda(root string) ([]*schedDef, error) {
 			ok = isID && id.Name == "Schedule"
 		}
 		if !ok {
-			return nil, &djoError{lineOf(s), "agenda.djo: só aceita chamadas Schedule.every: e Schedule.cron:"}
+			return nil, &djoError{Line: lineOf(s), Msg: "agenda.djo: só aceita chamadas Schedule.every: e Schedule.cron:"}
 		}
 	}
 	var defs []*schedDef
@@ -298,7 +298,7 @@ func loadAgenda(root string) ([]*schedDef, error) {
 	}
 	for _, d := range defs {
 		if err := jobFuncCheckErr(core.funcs, d.fn); err != nil {
-			return nil, &djoError{d.line, "agenda.djo: " + err.Error()}
+			return nil, &djoError{Line: d.line, Msg: "agenda.djo: " + err.Error()}
 		}
 	}
 	return defs, nil
