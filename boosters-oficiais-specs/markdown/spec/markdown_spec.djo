@@ -1,0 +1,108 @@
+// Specs do booster markdown (rodam num projeto com o markdown e o expect instalados; veja spec_boosters_test.go).
+
+f html
+    params[texto[String]]
+    var r = markdown.render:texto
+    return r["html"]
+
+// --- 1. linhas que começam com # e não são título: sempre avançam (antes travavam o render) ---
+
+f it_hash_que_nao_e_titulo_vira_paragrafo
+    expect.eq:(html:"#### quatro"):"<p>#### quatro</p>\n"
+    expect.eq:(html:"#etiqueta"):"<p>#etiqueta</p>\n"
+    expect.eq:(html:"#"):"<p>#</p>\n"
+    expect.eq:(html:"########"):"<p>########</p>\n"
+    expect.eq:(html:"#### a\n##### b"):"<p>#### a ##### b</p>\n"
+
+f it_hash_no_meio_de_outros_blocos
+    expect.eq:(html:"texto\n#### x\nmais"):"<p>texto #### x mais</p>\n"
+    expect.eq:(html:"- a\n#b\n- c"):"<ul>\n<li>a #b</li>\n<li>c</li>\n</ul>\n"
+    expect.eq:(html:"1. um\n#### z"):"<ol>\n<li>um</li>\n</ol>\n<p>#### z</p>\n"
+    expect.eq:(html:"```\n#### dentro do codigo\n```"):"<pre class=\"code code-djo\"><code>#### dentro do codigo</code></pre>\n"
+
+f it_titulos_de_verdade_continuam
+    var r = markdown.render:"# T\n\n## S\n\n### U\n\n#### nao"
+    expect.eq:r["titulo"]:"T"
+    expect.eq:r["toc"]:[{"id": "s", "titulo": "S"}]
+    expect.eq:r["html"]:"<h2 id=\"s\">S</h2>\n<h3 id=\"u\">U</h3>\n<p>#### nao</p>\n"
+
+// --- 2. o endereço do link: só http, https, mailto, relativos e âncoras ---
+
+f it_links_perigosos_ficam_so_com_o_texto
+    expect.eq:(html:"[t](javascript:alert`1`)"):"<p>t</p>\n"
+    expect.eq:(html:"[t](JaVaScRiPt:alert`1`)"):"<p>t</p>\n"
+    expect.eq:(html:"[t](java\tscript:alert`1`)"):"<p>t</p>\n"
+    expect.eq:(html:"[t]( javascript:x)"):"<p>t</p>\n"
+    expect.eq:(html:"[t](data:text/html,x)"):"<p>t</p>\n"
+    expect.eq:(html:"[t](vbscript:x)"):"<p>t</p>\n"
+    expect.eq:(html:"[t](file:///etc/passwd)"):"<p>t</p>\n"
+    expect.eq:(html:"[**t**](javascript:x)"):"<p><strong>t</strong></p>\n"
+
+f it_entidade_no_esquema_fica_inerte
+    // "&#106;avascript:" nunca vira um "j": o & é escapado e o navegador lê o texto como caminho
+    var h = html:"[t](&#106;avascript:x)"
+    expect.include:h:"href=\"&amp;#106;avascript:x\""
+
+f it_links_seguros_passam
+    expect.eq:(html:"[t](https://ok.com/a?b=1)"):"<p><a href=\"https://ok.com/a?b=1\">t</a></p>\n"
+    expect.eq:(html:"[t](HTTPS://OK.COM)"):"<p><a href=\"HTTPS://OK.COM\">t</a></p>\n"
+    expect.eq:(html:"[t](http://ok.com)"):"<p><a href=\"http://ok.com\">t</a></p>\n"
+    expect.eq:(html:"[t](mailto:a@b.com)"):"<p><a href=\"mailto:a@b.com\">t</a></p>\n"
+    expect.eq:(html:"[t](/rel/a)"):"<p><a href=\"/rel/a\">t</a></p>\n"
+    expect.eq:(html:"[t](rel/a)"):"<p><a href=\"rel/a\">t</a></p>\n"
+    expect.eq:(html:"[t](#ancora)"):"<p><a href=\"#ancora\">t</a></p>\n"
+    expect.eq:(html:"[t](a/b:c)"):"<p><a href=\"a/b:c\">t</a></p>\n"
+
+// --- 3. o título: titulo (texto puro, para {{ }}) e titulo_html (já escapado, para {{! }}) ---
+
+f it_titulo_html_e_escapado
+    var r = markdown.render:"# <b>T</b> & \"y\" `c`\n\n## <i>s</i>"
+    expect.eq:r["titulo"]:"<b>T</b> & \"y\" `c`"
+    expect.eq:r["titulo_html"]:"&lt;b&gt;T&lt;/b&gt; &amp; &#34;y&#34; <code>c</code>"
+    expect.eq:r["toc"]:[{"id": "i-s-i", "titulo": "&lt;i&gt;s&lt;/i&gt;"}]
+
+f it_sem_titulo
+    var r = markdown.render:"so um paragrafo"
+    expect.eq:r["titulo"]:""
+    expect.eq:r["titulo_html"]:""
+
+// --- 4. links .md: só o caminho relativo vira /docs/ ---
+
+f it_md_relativo_vira_docs_e_o_de_fora_nao
+    expect.eq:(html:"[a](04-web.md)"):"<p><a href=\"/docs/web\">a</a></p>\n"
+    expect.eq:(html:"[a](../02-structs.md)"):"<p><a href=\"/docs/structs\">a</a></p>\n"
+    expect.eq:(html:"[a](https://e.com/x.md)"):"<p><a href=\"https://e.com/x.md\">a</a></p>\n"
+    expect.eq:(html:"[a](//e.com/x.md)"):"<p><a href=\"//e.com/x.md\">a</a></p>\n"
+    expect.eq:(html:"[a](docs/04-web.md#api)"):"<p><a href=\"docs/04-web.md#api\">a</a></p>\n"
+
+// --- o que já valia (exemplos de docs/17-booster-markdown.md) ---
+
+f it_exemplo_titulo_e_toc
+    var r = markdown.render:"# Título do doc\n\nUm parágrafo com **negrito**, *itálico*, `código` e um [link](04-web.md).\n\n## Seção um\n\n### Sub"
+    expect.eq:r["titulo"]:"Título do doc"
+    expect.eq:r["toc"]:[{"id": "secao-um", "titulo": "Seção um"}]
+    expect.eq:r["html"]:"<p>Um parágrafo com <strong>negrito</strong>, <em>itálico</em>, <code>código</code> e um <a href=\"/docs/web\">link</a>.</p>\n<h2 id=\"secao-um\">Seção um</h2>\n<h3 id=\"sub\">Sub</h3>\n"
+
+f it_exemplo_listas_e_tabela
+    var r = markdown.render:"- item a\n- item b\n  continua\n\n1. primeiro\n2. segundo\n\n| a | b |\n|---|---|\n| 1 | **2** |"
+    expect.eq:r["html"]:"<ul>\n<li>item a</li>\n<li>item b continua</li>\n</ul>\n<ol>\n<li>primeiro</li>\n<li>segundo</li>\n</ol>\n<div class=\"tabela\"><table>\n<thead><tr><th>a</th><th>b</th></tr></thead>\n<tbody>\n<tr><td>1</td><td><strong>2</strong></td></tr>\n</tbody></table></div>\n"
+
+f it_html_cru_e_escapado
+    expect.eq:(html:"Texto <script>alert(1)</script> & \"aspas\""):"<p>Texto &lt;script&gt;alert(1)&lt;/script&gt; &amp; &#34;aspas&#34;</p>\n"
+
+f it_vazio
+    expect.eq:(markdown.render:""):{"html": "", "titulo": "", "titulo_html": "", "toc": []}
+
+f it_codigo_djo
+    expect.eq:(markdown.codigo:"var x = 1\nprint \"oi\" // c"):"<pre class=\"code code-djo\"><code><span class=\"t-k\">var</span> x = <span class=\"t-n\">1</span>\n<span class=\"t-k\">print</span> <span class=\"t-s\">&#34;oi&#34;</span> <span class=\"t-c\">// c</span></code></pre>\n"
+
+f it_codigo_html_e_shell
+    expect.eq:(markdown.codigo:"<p>{{ x }}</p>"):"<pre class=\"code code-html\"><code>&lt;p&gt;{{ x }}&lt;/p&gt;</code></pre>\n"
+    expect.eq:(markdown.codigo:"{{ x }}"):"<pre class=\"code code-sh\"><code>{{ x }}</code></pre>\n"
+
+f render_qualquer
+    params[x]
+    return markdown.render:x
+
+f it_erro_de_tipo
+    expect.raises:"render_qualquer":[42]:"deve ser String"

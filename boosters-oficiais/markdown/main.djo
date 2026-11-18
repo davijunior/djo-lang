@@ -122,11 +122,13 @@ f render
             cond[(len:(trim:l)) == 0]
             i++
         else
-            arr par = []
+            // a linha atual sempre entra (nenhuma volta do laço fica sem avançar, nem com um "#" solto)
+            arr par = [trim:l]
+            i++
             while{
                 cond[i < n and not (md_inicio_bloco:linhas[i])]
                 push:par:(trim:linhas[i])
                 i++
             }
             out = out + "<p>" + (md_inline:(join:par:" ")) + "</p>\n"
-    return {"html": out, "titulo": titulo, "toc": toc}
+    return {"html": out, "titulo": titulo, "titulo_html": md_inline:titulo, "toc": toc}
