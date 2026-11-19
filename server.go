@@ -50,10 +50,11 @@ type Server struct {
 	lane         *lane // limites do tráfego de agentes
 	rcache       respCache
 	askx         askState
-	jobs         jobState // a fila de jobs (criada no primeiro uso)
-	mailSend     bool     // -dev: Mail.send envia de verdade em vez de gravar o .eml
-	mailBox      *mailBox // o djo spec: captura os e-mails
-	dbRoot       string   // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
+	jobs         jobState     // a fila de jobs (criada no primeiro uso)
+	mailSend     bool         // -dev: Mail.send envia de verdade em vez de gravar o .eml
+	mailBox      *mailBox     // o djo spec: captura os e-mails
+	httpMock     *httpMockSet // o djo spec: Http simulado
+	dbRoot       string       // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
 }
 
 func NewServer(dir string, dev bool) (*Server, error) {
@@ -275,6 +276,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 	in.maxSteps = s.maxSteps
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
+	in.httpMock = s.httpMock
 	in.job = s.jobHost()
 	if err := in.loadCore(s.root); err != nil {
 		s.serverError(w, r, err)

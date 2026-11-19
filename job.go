@@ -546,6 +546,7 @@ func (e *jobEngine) execute(j *jobRow) (bool, error) {
 	in := newJobInterp(s.root, s.dbRoot, out, time.Duration(j.timeoutS)*time.Second, host)
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
+	in.httpMock = s.httpMock
 	if err := in.loadCore(s.root); err != nil {
 		return false, err
 	}
