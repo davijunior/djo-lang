@@ -56,8 +56,19 @@ func sessionCopy(v any, depth, line int) any {
 }
 
 // current devolve a sessão do visitante, criando uma nova (e o cookie) se preciso.
+// Só as chamadas que escrevem (set, renew, token) criam; ler não cria (veja lookup).
 // O chamador precisa estar com sessions.Lock().
 func (in *Interp) current(line int) *session {
+	if s := in.lookup(line); s != nil {
+		return s
+	}
+	return in.newSession(time.Now(), line)
+}
+
+// lookup devolve a sessão que o visitante já tem, ou nil. Não cria sessão nem cookie:
+// uma página que só lê não deve deixar o servidor guardar nada (senão quem não manda
+// cookie enche a memória a cada requisição).
+func (in *Interp) lookup(line int) *session {
 	in.needWeb(line, "Session")
 	now := time.Now()
 	if in.sid != "" {
@@ -73,19 +84,12 @@ func (in *Interp) current(line int) *session {
 			return s
 		}
 	}
-	return in.newSession(now, line)
+	return nil
 }
 
 func (in *Interp) newSession(now time.Time, line int) *session {
 	if len(sessions.m) >= sessMax {
-		for id, s := range sessions.m { // limpa as vencidas
-			if now.Sub(s.seen) >= sessTTL {
-				delete(sessions.m, id)
-			}
-		}
-		if len(sessions.m) >= sessMax {
-			fail(line, "Session: servidor com sessões demais")
-		}
+		evictSession(now)
 	}
 	id := randHex(16)
 	s := &session{data: newMap(), csrf: randHex(16), seen: now}
@@ -93,6 +97,34 @@ func (in *Interp) newSession(now time.Time, line int) *session {
 	in.sid = id
 	in.setSessionCookie(id, 0)
 	return s
+}
+
+// evictSession abre espaço quando a tabela está cheia, sem derrubar a página: tira as vencidas;
+// se ainda estiver cheia, a mais antiga SEM dados (só o token CSRF, nada que alguém perca);
+// em último caso, a mais antiga de todas.
+func evictSession(now time.Time) {
+	var oldEmptyID, oldID string
+	var oldEmpty, old time.Time
+	for id, s := range sessions.m {
+		if now.Sub(s.seen) >= sessTTL {
+			delete(sessions.m, id)
+			continue
+		}
+		if len(s.data.Keys) == 0 && (oldEmptyID == "" || s.seen.Before(oldEmpty)) {
+			oldEmptyID, oldEmpty = id, s.seen
+		}
+		if oldID == "" || s.seen.Before(old) {
+			oldID, old = id, s.seen
+		}
+	}
+	if len(sessions.m) < sessMax {
+		return
+	}
+	if oldEmptyID != "" {
+		delete(sessions.m, oldEmptyID)
+	} else if oldID != "" {
+		delete(sessions.m, oldID)
+	}
 }
 
 func (in *Interp) setSessionCookie(value string, maxAge int) {
@@ -126,7 +158,12 @@ func init() {
 	}
 	natives["Session"] = map[string]builtin{
 		"get": {1, locked(func(in *Interp, line int, a []any) any {
-			v, _ := in.current(line).data.get(sessKey(a, line, "Session.get"))
+			k := sessKey(a, line, "Session.get")
+			s := in.lookup(line)
+			if s == nil {
+				return nil
+			}
+			v, _ := s.data.get(k)
 			return sessionCopy(v, 0, line)
 		})},
 		"set": {2, locked(func(in *Interp, line int, a []any) any {
@@ -145,10 +182,16 @@ func init() {
 			return nil
 		})},
 		"del": {1, locked(func(in *Interp, line int, a []any) any {
-			return in.current(line).data.del(sessKey(a, line, "Session.del"))
+			k := sessKey(a, line, "Session.del")
+			if s := in.lookup(line); s != nil {
+				return s.data.del(k)
+			}
+			return false
 		})},
 		"clear": {0, locked(func(in *Interp, line int, a []any) any {
-			in.current(line).data = newMap()
+			if s := in.lookup(line); s != nil {
+				s.data = newMap()
+			}
 			return nil
 		})},
 		// Session.destroy: encerra a sessão (logout)
@@ -178,9 +221,9 @@ func init() {
 		})},
 		// Session.verify:valor -> o valor enviado bate com o token?
 		"verify": {1, locked(func(in *Interp, line int, a []any) any {
-			s := in.current(line)
+			s := in.lookup(line)
 			v, ok := a[0].(string)
-			return ok && subtle.ConstantTimeCompare([]byte(v), []byte(s.csrf)) == 1
+			return s != nil && ok && subtle.ConstantTimeCompare([]byte(v), []byte(s.csrf)) == 1
 		})},
 	}
 }

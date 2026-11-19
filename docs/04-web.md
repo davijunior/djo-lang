@@ -321,6 +321,8 @@ Dados do visitante guardados no servidor, ligados a um cookie (`djo_sid`: `HttpO
 - Só cabem dados simples: texto, números, `Bool`, `Arr` e `Map` (nada de structs). Guarde
   o `id` do usuário e busque o resto no banco.
 - Limite de 64 KB por sessão e 10 mil sessões; expiram após 24 h sem uso.
+- **Ler não cria sessão.** `Session.get`, `Session.del`, `Session.clear` e `Session.verify` de quem não tem sessão devolvem `nil`/`false` e não mandam cookie; só `Session.set`, `Session.renew` e `Session.token:` (o formulário precisa do token) criam. Assim uma página que só consulta o usuário logado não enche o servidor de sessões.
+- Com 10 mil sessões, uma nova não derruba a página: sai a vencida, senão a mais antiga **sem dados** (só o token), senão a mais antiga de todas.
 - As sessões ficam **na memória**: reiniciar o `djo serve` desloga todo mundo.
 - Atrás de um proxy HTTPS, o cookie recebe `Secure` quando o proxy confiável manda `X-Forwarded-Proto: https` (veja [Produção atrás de um proxy](#produção-atrás-de-um-proxy)).
 
