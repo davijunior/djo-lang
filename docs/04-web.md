@@ -165,6 +165,7 @@ Disponível só nas páginas servidas por `djo serve`.
 | `Http.json:`             | corpo lido como JSON (`nil` se inválido) |
 | `Http.file:"campo"`      | arquivo enviado: mapa `{name, size, type}`, ou `nil` |
 | `Http.upload:"campo":"pasta"` | grava o arquivo enviado e devolve o caminho, ou `nil` |
+| `Http.request_id:`       | o id desta requisição (o do log e do cabeçalho `X-Request-Id`; veja [Log do servidor](#log-do-servidor)) |
 | `Http.ip:`               | IP de quem chamou (o real, atrás de um proxy confiável: veja [Produção atrás de um proxy](#produção-atrás-de-um-proxy)) |
 | `Http.get:url` `Http.post:url:corpo` ... | requisições de saída (veja abaixo) |
 | `Http.cookie:"nome"`     | cookie, ou `nil` |
@@ -322,6 +323,20 @@ proxy_set_header X-Real-IP $remote_addr;
 - O **limite de agentes** (`-agent-rate`, veja [Agentes](10-agentes.md)) usa o mesmo IP: atrás de um proxy confiável ele passa a contar por visitante, e não mais um balde só para todos. Quem tinha ajustado `-agent-rate` para o total, pode reduzi-lo.
 - O `/ask` tem a sua própria lista (`Ask.proxy`), independente de `-trusted-proxy`.
 
+## Log do servidor
+
+Por padrão o `djo serve` escreve uma linha de texto por requisição (`GET /posts 200 3ms`). Para um sistema de log (ou para procurar por id), use JSON:
+
+```
+djo serve -log-format json -log-ip trunc
+```
+
+- `-log-format text|json` (ou `DJO_LOG_FORMAT`; o flag vence o ambiente).
+- `-log-ip trunc|full|off` (ou `DJO_LOG_IP`): o IP é dado pessoal. O padrão `trunc` zera o último byte (`203.0.113.0`; no IPv6, tudo depois do /48), `off` não registra, `full` registra inteiro.
+- Cada linha JSON tem só campos de uma lista fechada: `ts`, `level`, `request_id`, `method`, `route`, `status`, `ms`, `bytes`, `ip`, `error_code` e, nas linhas de erro, `msg` e `stack`. A `route` é o **padrão** da rota (`/clientes/{id}`), nunca a URL: a URL pode ter um token. Query, cabeçalhos, cookies e corpo **nunca** entram.
+- **ID da requisição:** toda resposta leva o cabeçalho `X-Request-Id`. Se o proxy mandou um (de 8 a 64 letras, números, `.`, `_` ou `-`), ele é mantido; senão o servidor cria um (`rq_...`). `Http.request_id:` devolve esse id dentro da página, para você pôr o mesmo id no erro que devolve ao cliente.
+- **Segredos:** a mensagem de erro e a saída dos jobs passam por um depurador que troca por `***` os valores das variáveis de ambiente com `KEY`, `SECRET`, `TOKEN`, `PASS`, `PWD`, `DSN` ou `CREDENTIAL` no nome (e as `DJO_CRYPTO_*`), `Bearer ...`, textos `djo1....` (do `Crypto`), a senha de `usuario:senha@host` e valores depois de `password`, `senha`, `token`, `secret`, `api_key`, `app_key`, `app_secret`. É uma rede de segurança, não uma garantia: **o que o seu código imprime com `print` não é depurado**, e um segredo escrito de outro jeito pode passar. Não ponha segredo em mensagem de erro.
+
 ## Sessões
 
 Dados do visitante guardados no servidor, ligados a um cookie (`djo_sid`: `HttpOnly`,
@@ -362,6 +377,25 @@ if
     print "token inválido"
     Http.redirect:"/entrar"
 ```
+
+## Limite de uso por chave: `Limit`
+
+O `-agent-rate` limita por IP. Para limitar **por token** (ou por empresa, por consumidor), use `Limit`:
+
+```
+var tok = Http.bearer:
+Limit.enforce:("tok:" + tok):100:60        // 100 chamadas por 60 s; passou: responde 429 e a página PARA
+var r = Limit.take:("tok:" + tok):100:60   // só conta e devolve {allowed, remaining, retry_after_s, reason}
+```
+
+- **`Limit.enforce:chave:quantas:janela`** (só em página): dentro do limite, acrescenta `RateLimit-Remaining` e segue. Fora dele responde **429** com `Retry-After: N` (segundos) e o corpo `{"error": "muitas_requisicoes", "retry_after_s": N}`, e a página termina como no `redirect`. Para o seu formato de erro, passe um 4º argumento: `Limit.enforce:chave:100:60:{"body": {"erro": {...}}, "headers": {"X-Algo": "1"}}` (`body` é texto ou dados, que viram JSON).
+- **`Limit.take`** não responde nada: você decide. `reason` é `nil`, ou `"cheio"` (veja abaixo).
+- `quantas` vai de 1 a 1.000.000; a janela, de 1 s a 24 h (em segundos). É uma janela **deslizante** aproximada (a janela anterior pesa na proporção do que falta dela): não dá para "gastar tudo no fim de uma janela e tudo no início da outra".
+- **Escolha bem a chave.** Use a de quem **já foi autenticado** (token validado, id de empresa). A tabela guarda até 50.000 chaves vivas e **nunca expulsa uma viva**: se um atacante inventar chaves (IPs, e-mails digitados) até encher, quem chega depois recebe `"cheio"` (o `enforce` responde **503** com `Retry-After: 1`). Chave que o visitante escolhe é a que não deve alimentar o `Limit`.
+- A chave é guardada só como SHA-256: o token não fica na memória do contador.
+- **Os contadores ficam na memória do processo:** somem se o servidor reinicia e **não valem entre várias instâncias** do `djo serve`. (Um job que roda no mesmo `djo serve` conta nos mesmos contadores.)
+- Numa rota com `cache` (resposta guardada e servida sem rodar a página), o limite só conta nas execuções de verdade; não use `Limit` em rota cacheada.
+- No `djo spec`, cada teste começa com os contadores zerados; `Spec.limit_reset:` zera no meio do teste.
 
 ## Senhas e valores aleatórios: Hash
 

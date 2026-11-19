@@ -729,6 +729,7 @@ var specRunJobs = func(in *Interp, c *specCtx, only int64, line int) any {
 		child.maxSteps = specMaxSteps
 		child.spec = c
 		child.httpMock = c.http
+		child.limiter = c.lim
 		var err error
 		if lerr := child.loadCore(in.root); lerr != nil {
 			err = lerr

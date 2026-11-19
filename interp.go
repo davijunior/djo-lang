@@ -106,6 +106,7 @@ type Interp struct {
 	served          bool          // páginas servidas não alcançam endereços internos
 	outCalls        int           // chamadas externas feitas nesta página
 	locks           []*lockHold   // travas (lock{}) que esta execução segura agora
+	limiter         *limiter      // o djo spec: contadores de Limit próprios (nil: os do processo)
 	httpMock        *httpMockSet  // o djo spec: respostas de Http simuladas (nil fora do spec)
 	outWaited       time.Duration // tempo já esperado em chamadas externas nesta página
 	slept           int64         // ms de Time.sleep nesta página (servidor)
