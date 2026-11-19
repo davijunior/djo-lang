@@ -371,8 +371,13 @@ if
 | `Hash.verify:senha:guardado` | `true` se a senha bate |
 | `Hash.sha256:texto`       | SHA-256 em hexadecimal |
 | `Hash.random:n`           | `n` bytes aleatórios seguros, em hexadecimal (1 a 64) |
+| `Hash.hmac:chave:texto`   | HMAC-SHA256 em hexadecimal: assinatura de um texto com uma chave (webhooks) |
+| `Hash.equal:a:b`          | `true` se os dois textos são iguais, em tempo constante (use para comparar tokens e assinaturas, nunca `==`) |
 
 Nunca guarde a senha em texto: guarde o resultado de `Hash.password:`.
+
+Para validar a assinatura de um webhook: `Hash.equal:(Hash.hmac:segredo:corpo):(Http.header:"X-Assinatura")`. Compare sempre com
+`Hash.equal:`, que não revela por onde os textos começam a diferir.
 O mesmo texto gera hashes diferentes (por causa do sal), então compare só com `Hash.verify:`.
 
 ## Upload de arquivos
