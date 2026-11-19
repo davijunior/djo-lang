@@ -27,6 +27,9 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "spec" {
 		os.Exit(specMain(os.Args[2:], os.Stdout, os.Stderr))
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "crypto" {
+		os.Exit(cryptoMain(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "jobs" {
 		os.Exit(jobsMain(os.Args[2:], os.Stdout, os.Stderr))
 	}

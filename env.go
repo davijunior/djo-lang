@@ -22,6 +22,9 @@ func init() {
 		if !ok || !envName.MatchString(name) {
 			fail(line, "Env.get: o nome da variável precisa ser um texto como \"DB_SENHA\" (letras, números e _)")
 		}
+		if cryptoReserved(name) {
+			fail(line, "Env.get: a variável '%s' é reservada (guarda a chave do Crypto) e a linguagem não a lê", name)
+		}
 		if v, found := os.LookupEnv(name); found {
 			return v
 		}

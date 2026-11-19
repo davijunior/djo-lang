@@ -61,7 +61,7 @@ const (
 var boosterName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 
 // permissões que um booster precisa declarar; o resto (Json, Time, Hash...) é puro.
-var restrictedNS = map[string]bool{"Http": true, "File": true, "Db": true, "Session": true, "Serial": true, "Route": true, "Env": true, "Spec": true, "Mail": true, "Job": true}
+var restrictedNS = map[string]bool{"Http": true, "File": true, "Db": true, "Session": true, "Serial": true, "Route": true, "Env": true, "Spec": true, "Mail": true, "Job": true, "Crypto": true}
 
 // checkPerm barra um booster que usa um namespace com efeito no mundo sem declarar.
 func (in *Interp) checkPerm(ns string, line int) {
@@ -131,7 +131,7 @@ func readBoosterManifest(dir string) (*boosterManifest, error) {
 	}
 	for _, p := range m.Permissoes {
 		if !restrictedNS[p] {
-			return nil, fmt.Errorf("booster.json: permissão '%s' desconhecida (valem: Http, File, Db, Session, Serial, Route, Env, Mail, Job, Spec)", p)
+			return nil, fmt.Errorf("booster.json: permissão '%s' desconhecida (valem: Http, File, Db, Session, Serial, Route, Env, Mail, Job, Crypto, Spec)", p)
 		}
 	}
 	return &m, nil

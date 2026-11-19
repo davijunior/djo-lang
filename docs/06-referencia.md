@@ -165,6 +165,32 @@ serviços): ficam fora do código e do executável (`djo build` não leva o ambi
 `f` do projeto pode ler todas as variáveis do processo, então **nunca imprima** o resultado em uma página. Um
 booster só usa `Env` se pedir a permissão no `booster.json`.
 
+Os nomes que começam com `DJO_CRYPTO_` são **reservados**: `Env.get` (e o `${VAR}` do `Db.open`) os recusam, para a chave do `Crypto` nunca virar um valor que uma página possa ler.
+
+## Crypto
+
+Cifra para guardar segredos no banco (credenciais de um sistema externo, tokens por empresa). AES-256-GCM, só com a biblioteca padrão: existe em todos os perfis.
+
+| Chamada | O que faz |
+|--------|-----------|
+| `Crypto.seal:texto` | cifra com a chave atual e devolve um texto próprio para o banco (`djo1.<id da chave>.<dados>`) |
+| `Crypto.seal:texto:contexto` | o mesmo, **amarrando** o texto ao contexto (`"empresa:42"`) |
+| `Crypto.open:cifrado` / `Crypto.open:cifrado:contexto` | devolve o texto original; o contexto tem de ser o mesmo do `seal` |
+
+```
+var guardado = Crypto.seal:token:"empresa:42"
+var token = Crypto.open:guardado:"empresa:42"
+```
+
+- **Use sempre o contexto para segredos por empresa (ou por usuário).** Sem ele, quem consegue copiar o texto cifrado da empresa 7 para a linha da empresa 42 faz o sistema abri-lo lá. Com o contexto, isso dá erro.
+- **A chave** vem do ambiente do servidor: `DJO_CRYPTO_KEY`, 32 bytes em hexadecimal (64 letras e números). `djo crypto newkey` gera uma. Ela nunca é um valor da linguagem: o `Env.get` a recusa e nenhuma mensagem de erro a mostra. Sem a chave, `Crypto.seal` e `Crypto.open` dão um erro que diz o que fazer; com a chave malformada, o `djo serve` nem sobe. Guarde a chave num lugar seguro: **sem ela, o que foi cifrado não abre**.
+- **Rotação:** ponha a chave nova em `DJO_CRYPTO_KEY` e a velha em `DJO_CRYPTO_KEYS_OLD` (várias, separadas por vírgula; só abrem). Cada texto traz o id da chave que o cifrou. Para aposentar a velha, rode um job que faz `Crypto.seal:(Crypto.open:x:ctx):ctx` em cada linha.
+- **O id da chave** que aparece no texto cifrado (`djo1.<id>.…`) são 4 bytes de um SHA-256 da chave: serve só para achar a chave certa na rotação e **não é segredo**.
+- **Onde pôr a chave:** num arquivo de ambiente do serviço (no systemd, `EnvironmentFile=/etc/meusite/djo.env` com modo `600`, dono do usuário do serviço), nunca na linha de comando (ela aparece no `ps`) nem no repositório.
+- `Crypto.open` com texto alterado, contexto errado ou chave errada dá **o mesmo erro** (`não consegui abrir`), que o `promise` pega como qualquer outro. Máximo de 64 KB por texto.
+- No `djo spec`, sem `DJO_CRYPTO_KEY`, vale uma chave aleatória só daquela execução (os testes cifram e abrem; nada fica de um teste para o outro). No `djo serve -dev` a falta da chave continua sendo erro: uma chave escondida deixaria dados que não abrem depois.
+- Um booster precisa da permissão `Crypto` no `booster.json`.
+
 ## Mail
 
 | Chamada | O que faz |
