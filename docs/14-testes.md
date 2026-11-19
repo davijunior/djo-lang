@@ -124,6 +124,7 @@ A negação existe só em `not_eq`. Para negar os outros, confira uma condição
 | `Spec.try:"funcao":[args]` | chama uma função **do projeto** e devolve `{"ok", "value", "error", "line", "code", "data", "file"}` (os três últimos, do erro, como no `promise`); captura o erro de execução, mas deixa passar `Spec.fail` e `Spec.skip` |
 | `Spec.emails:` | a lista dos e-mails que o `Mail.send` "enviou" neste teste (nada sai de verdade); veja [E-mail](15-email.md) |
 | `Spec.jobs:` `Spec.run_jobs:` `Spec.run_job:id` | os jobs que o `Job.run` enfileirou no teste (nada roda sozinho) e a execução síncrona deles; veja [Jobs](16-jobs.md) |
+| `Spec.lock_hold:"chave"` `Spec.lock_release:"chave"` | simula outra execução segurando a [trava](04-web.md#trava-por-chave-lock) (até soltar ou o fim do teste) |
 | `Spec.agenda:` | a agenda do `agenda.djo` |
 | `Spec.limit_reset:` | zera os contadores do `Limit` neste teste (cada teste já começa limpo); veja [Limit](04-web.md#limite-de-uso-por-chave-limit) |
 | `Spec.http_mock:"GET":"https://api.x.com/a":{"status": 200, "json": {...}}` `Spec.http_calls:` `Spec.http_calls_raw:` `Spec.http_mock_clear:` | respostas simuladas para o `Http.*` (nada sai pela rede); veja [Mock de Http](#mock-de-http) |

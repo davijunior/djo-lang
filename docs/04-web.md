@@ -333,7 +333,7 @@ djo serve -log-format json -log-ip trunc
 
 - `-log-format text|json` (ou `DJO_LOG_FORMAT`; o flag vence o ambiente).
 - `-log-ip trunc|full|off` (ou `DJO_LOG_IP`): o IP é dado pessoal. O padrão `trunc` zera o último byte (`203.0.113.0`; no IPv6, tudo depois do /48), `off` não registra, `full` registra inteiro.
-- Cada linha JSON tem só campos de uma lista fechada: `ts`, `level`, `request_id`, `method`, `route`, `status`, `ms`, `bytes`, `ip`, `error_code` e, nas linhas de erro, `msg` e `stack`. A `route` é o **padrão** da rota (`/clientes/{id}`), nunca a URL: a URL pode ter um token. Query, cabeçalhos, cookies e corpo **nunca** entram.
+- Cada linha JSON tem só campos de uma lista fechada: `ts`, `level`, `request_id`, `method`, `route`, `status`, `ms`, `bytes`, `ip`, `error_code` e, nas linhas de erro, `msg` e `stack`. A `route` é o **padrão** da rota (`/clientes/{id}`) ou, em sites sem `rotas.djo`, o **arquivo** que atendeu (`blog/post.djo`), nunca a URL: a URL pode ter um token. (O formato `text` continua registrando o caminho da URL, sem a query: não ponha token no caminho.) Query, cabeçalhos, cookies e corpo **nunca** entram.
 - **ID da requisição:** toda resposta leva o cabeçalho `X-Request-Id`. Se o proxy mandou um (de 8 a 64 letras, números, `.`, `_` ou `-`), ele é mantido; senão o servidor cria um (`rq_...`). `Http.request_id:` devolve esse id dentro da página, para você pôr o mesmo id no erro que devolve ao cliente.
 - **Segredos:** a mensagem de erro e a saída dos jobs passam por um depurador que troca por `***` os valores das variáveis de ambiente com `KEY`, `SECRET`, `TOKEN`, `PASS`, `PWD`, `DSN` ou `CREDENTIAL` no nome (e as `DJO_CRYPTO_*`), `Bearer ...`, textos `djo1....` (do `Crypto`), a senha de `usuario:senha@host` e valores depois de `password`, `senha`, `token`, `secret`, `api_key`, `app_key`, `app_secret`. É uma rede de segurança, não uma garantia: **o que o seu código imprime com `print` não é depurado**, e um segredo escrito de outro jeito pode passar. Não ponha segredo em mensagem de erro.
 
@@ -377,6 +377,30 @@ if
     print "token inválido"
     Http.redirect:"/entrar"
 ```
+
+## Trava por chave: `lock`
+
+Quando duas requisições (ou jobs) não podem mexer na mesma coisa ao mesmo tempo (por exemplo, a mesma empresa chamando o mesmo método de um ERP), use `lock`:
+
+```
+lock{
+    key["omie:" + empresa + ":ListarContas"]
+    wait[2]
+    var r = Http.get:url
+    return r
+}
+```
+
+- `key[...]` é um texto de 1 a 200 bytes. **Não ponha segredo na chave** (use o id da empresa, não o token): ela aparece no erro, no log e no `Job.status`. `wait[...]` é quanto esperar pela vez, em segundos (`2`) ou texto (`"2s"`, `"1m"`). Os dois vêm no começo do bloco. `lock` não é palavra reservada (`var lock = 1` continua valendo).
+- **Chaves diferentes rodam em paralelo; a mesma chave, uma de cada vez**, na ordem de chegada (fila FIFO; no máximo 100 esperando por chave, a 101ª recebe `lock_busy` na hora).
+- **O bloco não é isolado** (ao contrário do `promise`): lê e escreve as variáveis de fora, e um `return` dentro dele **retorna da função que contém o `lock`** (retorno antecipado). `return`, `reject`, `redirect`, erro, `Spec.fail` e os limites de proteção soltam a trava. Dentro de um `promise{}`, um bloco que falha solta a trava.
+- **Não deu a vez em `wait`:** erro `lock_busy` (`err["code"]`), com `err["data"]` = `{"key": ..., "wait_s": ...}`. Pegue-o num `promise` e responda o que fizer sentido (o Hub responde 503 `erp_ocupado`).
+- **Numa página** o `wait` conta na mesma cota de **2 segundos** do `Time.sleep` (um `wait` que não cabe é um erro claro, não um ajuste). Num **job**, vale o que resta do `timeout` dele.
+- **Prazo (lease):** a trava vale 30 s numa página e o `timeout` do job num job (60 s em script). Passou disso, a trava é **cedida** ao próximo da fila e quem a segurava é interrompido no **próximo passo** com `lock_revoked` (um erro fatal, que o `promise` não captura). **Janela residual:** uma chamada `Http` ou `Db` que já estava em andamento pode terminar depois da cessão, e o que a execução antiga já gravou **não é desfeito**. Mantenha o corpo curto: a trava é para proteger uma chamada, não um processamento longo.
+- **Não pegue a trava dentro de `Db.begin`** (`lock_in_transaction`): esperar com a transação aberta prende o banco para quem já segura a trava. O contrário (`Db.begin` dentro do `lock`) é o uso certo. Pegar a mesma chave de novo na mesma execução é `lock_reentrant`. Chaves diferentes aninhadas são permitidas, mas pegue-as sempre na mesma ordem (A e depois B em todo lugar); no pior caso o `wait` termina em `lock_busy`.
+- **Só vale dentro do mesmo `djo serve`.** A trava fica na memória do processo: um script solto (`djo arquivo.djo`) ou outra instância do servidor é outro processo e **não é excluído**. Se um script de sincronização precisa respeitar a trava, rode-o como `Job`.
+- **Frequência de 503:** com a espera máxima de 2 s numa página e uma chamada externa de até 8 s, requisições simultâneas da mesma chave dão `lock_busy` com frequência. É o comportamento desejado: responda "tente de novo" em vez de empilhar.
+- No `djo spec`, `Spec.lock_hold:"chave"` simula **outra** execução segurando a trava (até `Spec.lock_release:"chave"` ou o fim do teste): assim se testa o 503 da página e o reagendamento do job.
 
 ## Limite de uso por chave: `Limit`
 

@@ -206,3 +206,21 @@ func TestLogTextoContinuaIgual(t *testing.T) {
 		t.Errorf("%q", got)
 	}
 }
+
+// Sem rotas.djo (roteamento por arquivo) o log mostra o arquivo que atendeu, não a URL.
+func TestLogRoteamentoPorArquivo(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "blog"), 0o755)
+	os.WriteFile(filepath.Join(root, "blog", "post.djo"), []byte("print \"oi\"\n"), 0o644)
+	s, err := NewServer(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	s.logFormat, s.logIP = "json", "off"
+	s.logger = log.New(scrubWriter{&buf}, "", 0)
+	s.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/blog/post?token=abc123xyz", nil))
+	if !strings.Contains(buf.String(), `"route":"blog/post.djo"`) || strings.Contains(buf.String(), "abc123xyz") {
+		t.Errorf("%s", buf.String())
+	}
+}
