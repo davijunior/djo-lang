@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/hmac"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -62,6 +63,26 @@ func init() {
 		"sha256": {1, func(in *Interp, env *Env, line int, a []any) any {
 			sum := sha256.Sum256([]byte(argStr(a, 0, line, "Hash.sha256")))
 			return hex.EncodeToString(sum[:])
+		}},
+		// Hash.hmac:chave:texto -> HMAC-SHA256 em hexadecimal (assinatura de webhooks)
+		"hmac": {2, func(in *Interp, env *Env, line int, a []any) any {
+			key := argStr(a, 0, line, "Hash.hmac")
+			msg, ok := a[1].(string)
+			if !ok {
+				fail(line, "Hash.hmac espera o texto como String, mas recebeu %s", typeName(a[1]))
+			}
+			m := hmac.New(sha256.New, []byte(key))
+			m.Write([]byte(msg))
+			return hex.EncodeToString(m.Sum(nil))
+		}},
+		// Hash.equal:a:b -> comparação em tempo constante (tokens, assinaturas); textos de tamanhos diferentes dão false
+		"equal": {2, func(in *Interp, env *Env, line int, a []any) any {
+			x, ok1 := a[0].(string)
+			y, ok2 := a[1].(string)
+			if !ok1 || !ok2 {
+				return false
+			}
+			return subtle.ConstantTimeCompare([]byte(x), []byte(y)) == 1
 		}},
 		// Hash.random:n -> texto aleatório seguro com n bytes (2n caracteres hex)
 		"random": {1, func(in *Interp, env *Env, line int, a []any) any {

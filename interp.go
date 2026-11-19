@@ -103,12 +103,13 @@ type Interp struct {
 	root       string // pasta do site: base do include
 	webState
 	serial          serialState
-	served          bool  // páginas servidas não alcançam endereços internos
-	outCalls        int   // chamadas externas feitas nesta página
-	slept           int64 // ms de Time.sleep nesta página (servidor)
-	wrote           int   // bytes gravados por File.* nesta página (servidor)
-	steps, maxSteps int   // maxSteps>0 limita a execução (servidor)
-	Echo            bool  // REPL: mostra o valor de expressões soltas
+	served          bool          // páginas servidas não alcançam endereços internos
+	outCalls        int           // chamadas externas feitas nesta página
+	outWaited       time.Duration // tempo já esperado em chamadas externas nesta página
+	slept           int64         // ms de Time.sleep nesta página (servidor)
+	wrote           int           // bytes gravados por File.* nesta página (servidor)
+	steps, maxSteps int           // maxSteps>0 limita a execução (servidor)
+	Echo            bool          // REPL: mostra o valor de expressões soltas
 	dbs             dbState
 	ask             *askConfig          // só enquanto o ask.djo é lido
 	boosters        map[string]*booster // boosters/ do projeto, pelo nome
