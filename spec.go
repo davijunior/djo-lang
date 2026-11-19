@@ -37,7 +37,8 @@ type specCtx struct {
 	mails  *mailBox
 	jobs   *specJobBox
 	http   *httpMockSet
-	server any // *Server, criado na primeira chamada de rota (spec_web.go)
+	holds  map[string]*lockHold // Spec.lock_hold: travas seguradas "por outra execução" até o fim do teste
+	server any                  // *Server, criado na primeira chamada de rota (spec_web.go)
 }
 
 // specSignal interrompe o spec: falha (Spec.fail) ou pulado (Spec.skip).
@@ -581,6 +582,7 @@ func specRun(root, file string, prog []Stmt, fn, desc, lang string) (res specRes
 	defer func() {
 		if in.spec != nil {
 			specCloseServer(in.spec)
+			in.spec.releaseHolds()
 		}
 	}()
 

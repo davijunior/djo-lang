@@ -392,6 +392,8 @@ func jobStatusMap(id int64, fn, state string, tries, maxTries int, runAt, create
 	} else {
 		m.set("error", nil)
 	}
+	m.set("lock_reschedules", int64(0))
+	m.set("lock_key", nil)
 	return m
 }
 
