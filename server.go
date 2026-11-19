@@ -319,12 +319,12 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 
 func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) {
 	if s.logger != nil {
-		s.logger.Printf("ERRO em %s: %v", r.URL.Path, err)
+		s.logger.Printf("ERRO em %s: %v%s", r.URL.Path, err, errTrace(err))
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
 	if s.dev {
-		fmt.Fprintf(w, "<h1>Erro na página</h1><pre>%s</pre>", html.EscapeString(err.Error()))
+		fmt.Fprintf(w, "<h1>Erro na página</h1><pre>%s</pre>", html.EscapeString(err.Error()+errTrace(err)))
 		return
 	}
 	fmt.Fprint(w, "500 erro interno")

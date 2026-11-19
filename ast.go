@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // djoError é o erro de sintaxe ou de execução, sempre com a linha.
 type djoError struct {
@@ -11,6 +14,70 @@ type djoError struct {
 	Data  any    // dados do reject:
 	File  string // "boosters/nome" quando o erro nasceu dentro de um booster
 	Fatal bool   // limites de proteção (passos, tempo, chamadas, recursão): o promise não captura
+
+	// pilha de chamadas (só para log, modo dev e err["stack"]; nunca vai para o corpo da resposta em produção)
+	Stack   []errFrame
+	omitted int  // quadros além de errMaxFrames
+	next    int  // linha que o próximo quadro (a função que chamou) vai receber
+	started bool // o primeiro quadro já foi anotado
+}
+
+// errFrame é um quadro da pilha: a função, o arquivo dela e a linha onde o erro passou por ela.
+type errFrame struct {
+	Fn, File string
+	Line     int
+}
+
+const errMaxFrames = 8
+
+// addFrame anota que o erro passou pela função fn (arquivo file), chamada na linha callLine do chamador.
+func (e *djoError) addFrame(fn, file string, callLine int) {
+	if !e.started {
+		e.started, e.next = true, e.Line
+		if e.File == "" && file != "" {
+			e.File = file // o arquivo ONDE o erro nasceu (antes era o da página que chamou)
+		}
+	}
+	if len(e.Stack) < errMaxFrames {
+		e.Stack = append(e.Stack, errFrame{fn, file, e.next})
+	} else {
+		e.omitted++
+	}
+	e.next = callLine
+}
+
+// Trace descreve a pilha, uma chamada por linha ("" se o erro não passou por função).
+func (e *djoError) Trace() string {
+	if len(e.Stack) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i, f := range e.Stack {
+		verb := "chamada em"
+		if i == 0 {
+			verb = "em"
+		}
+		where := fmt.Sprintf("linha %d", f.Line)
+		if f.File != "" {
+			where = fmt.Sprintf("%s:%d", f.File, f.Line)
+		}
+		fmt.Fprintf(&b, "\n  %s %s (função %s)", verb, where, f.Fn)
+	}
+	if e.omitted > 0 {
+		fmt.Fprintf(&b, "\n  ... mais %d chamada(s) omitida(s)", e.omitted)
+	}
+	if e.next > 0 {
+		fmt.Fprintf(&b, "\n  chamada na linha %d do arquivo que rodou", e.next)
+	}
+	return b.String()
+}
+
+// errTrace devolve a pilha de um erro da djo ("" se não houver), para log e modo dev.
+func errTrace(err error) string {
+	if de, ok := err.(*djoError); ok {
+		return de.Trace()
+	}
+	return ""
 }
 
 func (e *djoError) Error() string {
@@ -146,6 +213,7 @@ type (
 		Action  bool        // declarada com "action": também vira endpoint de agente
 		Doc     string      // texto de descrição (primeira linha da action, entre aspas)
 		Booster *booster    // booster que declarou a função (nil no core e nas páginas)
+		File    string      // arquivo onde foi declarada, relativo à pasta do site (core/x.djo, boosters/nome); "" nas páginas
 	}
 	// FieldDecl: nome[Tipo] nocall = padrão
 	FieldDecl struct {

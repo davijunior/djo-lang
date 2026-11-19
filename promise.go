@@ -202,6 +202,15 @@ func errMap(e *djoError) *Map {
 	}
 	m.set("code", code)
 	m.set("data", e.Data)
+	st := &Array{}
+	for _, f := range e.Stack {
+		fm := newMap()
+		fm.set("fn", f.Fn)
+		fm.set("file", f.File)
+		fm.set("line", int64(f.Line))
+		st.Items = append(st.Items, fm)
+	}
+	m.set("stack", st)
 	if e.File == "" {
 		m.set("file", nil)
 	} else {

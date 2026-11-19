@@ -247,9 +247,39 @@ O valor é o `return` do `success` (se deu certo), ou o `return` do `error` (se 
 |---|---|
 | `msg` | a mensagem |
 | `line` | a linha onde o erro nasceu |
-| `code` | `"erro"` nos erros da própria djo (tipo errado, índice fora, divisão por zero, banco...); nos erros que você lança, o código que você deu |
+| `code` | `"erro"` nos erros da própria djo (tipo errado, índice fora, divisão por zero, banco...), **menos** os que têm código próprio (tabela abaixo); nos erros que você lança, o código que você deu |
 | `data` | `nil` nos erros da djo; nos seus, os dados que você mandou |
-| `file` | `"boosters/nome"` se o erro nasceu dentro de um booster (a `line` é a do arquivo do booster), senão `nil` |
+| `file` | o arquivo **onde o erro nasceu**: `"core/clientes.djo"` se foi numa função do `core/`, `"boosters/nome"` num booster, `nil` se foi direto na página ou no script. (Até a v0.10 só o booster aparecia aqui; quem testava `file == nil` para o core precisa rever.) `line` é a linha **nesse** arquivo |
+| `stack` | a pilha de chamadas, da função onde nasceu até a mais externa: `[{"fn", "file", "line"}, ...]` (no máximo 8; vazia se o erro nasceu fora de qualquer função). É para depurar: **não a mostre ao visitante** (ela traz caminhos do projeto, como `core/clientes.djo`; quem imprime o `err` inteiro numa página pública expõe esses caminhos) |
+
+Em produção a resposta 500 nunca mostra a pilha nem caminhos. Ela aparece no log do servidor, em `djo serve -dev` e na saída de `djo arquivo.djo`:
+
+```
+erro (linha 3): divisão por zero
+  em core/a.djo:3 (função interno)
+  chamada em core/a.djo:7 (função meio)
+  chamada na linha 1 do arquivo que rodou
+```
+
+**Códigos estáveis.** O texto de uma mensagem pode melhorar entre versões; o `code` é o contrato (confira o `code`, não o texto):
+
+| `code` | Quando |
+|---|---|
+| `reserved_name` | palavra reservada (como `f`) usada de nome de variável |
+| `nested_call` | `:` a mais; chamada usada como argumento sem parênteses |
+| `namespace_as_value` | `Json` (um namespace) usado como valor, em geral por falta de parênteses |
+| `invalid_escape` | `"\r"` e outros escapes que não existem |
+| `operator_types` | operador com tipos que não combinam (`"x" * 5`, `lista + lista`) |
+| `wrong_arity` | número de argumentos errado |
+| `unknown_name` | variável, função ou struct inexistente (com "quer dizer ...?" quando há nome parecido) |
+| `unknown_member` | função inexistente num namespace (`Json.decod`) |
+| `booster_function` | função que o booster não expõe (a mensagem lista as que ele expõe) |
+| `nil_index` | `x["a"]` com `x` nil (a mensagem diz qual expressão era nil) |
+| `sql_nil_literal` | `nil` escrito no texto do SQL (em SQL é `null`) |
+| `crypto_key_missing`, `crypto_key_invalid` | `Crypto`: falta `DJO_CRYPTO_KEY` / ela está malformada |
+| `crypto_open_failed` | `Crypto.open`: chave, contexto ou texto não batem (a mensagem não diz qual) |
+| `crypto_key_unknown` | `Crypto.open`: o texto foi cifrado com uma chave que não está mais configurada |
+| `crypto_input_invalid` | `Crypto`: argumento que não é texto, formato desconhecido, texto grande demais |
 
 **Lançar um erro: `reject:`.**
 
