@@ -105,6 +105,7 @@ type Interp struct {
 	serial          serialState
 	served          bool          // páginas servidas não alcançam endereços internos
 	outCalls        int           // chamadas externas feitas nesta página
+	locks           []*lockHold   // travas (lock{}) que esta execução segura agora
 	limiter         *limiter      // o djo spec: contadores de Limit próprios (nil: os do processo)
 	httpMock        *httpMockSet  // o djo spec: respostas de Http simuladas (nil fora do spec)
 	outWaited       time.Duration // tempo já esperado em chamadas externas nesta página
@@ -180,6 +181,9 @@ func (in *Interp) execBlock(stmts []Stmt, env *Env) (any, bool) {
 
 func (in *Interp) tick() {
 	in.steps++
+	if len(in.locks) > 0 {
+		in.lockCheck()
+	}
 	if in.maxSteps > 0 && in.steps > in.maxSteps {
 		if in.spec != nil {
 			failFatal(0, "o spec passou do limite de passos (um laço sem fim?) e foi interrompido")
@@ -272,6 +276,10 @@ func (in *Interp) exec(s Stmt, env *Env) (any, bool) {
 			fail(n.Line, "'%s' é %s e não pode receber %s", n.Name, typ, typeName(nv))
 		} else if res == outerLocked {
 			fail(n.Line, outerMsg, n.Name)
+		}
+	case *LockStmt:
+		if v, returned := in.execLock(n, env); returned {
+			return v, true
 		}
 	case *WhileStmt:
 		loop := newEnv(env)

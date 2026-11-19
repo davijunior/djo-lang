@@ -236,6 +236,9 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
+	if rel, err := filepath.Rel(s.root, file); err == nil { // roteamento por arquivo: o log mostra o ARQUIVO, nunca a URL
+		metaOf(r).route = filepath.ToSlash(rel)
+	}
 	real, err := filepath.EvalSymlinks(file)
 	if err != nil || !withinRoot(s.realRoot, real) {
 		s.notFound(w, r)

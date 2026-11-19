@@ -76,6 +76,8 @@ func lineOf(s Stmt) int {
 		return n.Line
 	case *UntilStmt:
 		return n.Line
+	case *LockStmt:
+		return n.Line
 	}
 	return 0
 }

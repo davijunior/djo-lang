@@ -132,6 +132,9 @@ func (p *Parser) parseStmt() Stmt {
 		if p.promiseAt(p.pos, true) {
 			return &ExprStmt{p.parsePromise()}
 		}
+		if p.lockAt(p.pos) {
+			return p.parseLock()
+		}
 		p.strayClause()
 	case TplText:
 		p.next()

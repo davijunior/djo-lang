@@ -267,6 +267,12 @@ type (
 		Body []Stmt
 		Line int
 	}
+	// LockStmt: lock{ key[...] wait[...] corpo }: exclusão mútua por chave
+	LockStmt struct {
+		Key, Wait Expr
+		Body      []Stmt
+		Line      int
+	}
 	// InterfaceDecl: os métodos que uma struct precisa ter (sem corpo)
 	InterfaceDecl struct {
 		Name    string

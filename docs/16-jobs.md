@@ -122,6 +122,12 @@ f sincronizar
 
 Para forçar um erro num teste, use `reject:"teste":"falhou de propósito"` (no lugar de uma conta como `1 / 0`). Um `Job.run` feito dentro de um `promise` que falha é descartado; o chamado dentro de um que dá certo segue a regra de sempre (fica retido até a página ou o job terminar sem erro). O limite de chamadas `Http` (20 por padrão) vale para a execução inteira do job, dentro ou fora de promises. Veja [Erros e promises](01-basico.md#erros-e-promises).
 
+## Trava (`lock`) em jobs
+
+Um job que usa [`lock`](04-web.md#trava-por-chave-lock) e não consegue a vez em `wait` falha com `lock_busy`. Se o erro **sai sem captura**, o job é **reagendado** (backoff de 5 s a 60 s) **sem gastar a tentativa**, no máximo 20 vezes; depois disso vale a falha normal. Enquanto espera, `Job.status:id` mostra `state: "waiting_lock"`, `lock_key` (a chave) e `lock_reschedules` (quantos reagendamentos já teve).
+
+> **Atenção, idempotência:** o job **reexecuta do começo** a cada reagendamento. O que ele fez **antes** do `lock` (gravar no banco, mandar e-mail, enfileirar outro job) **se repete**. Por isso, ponha o `lock` no **início** da função do job, antes de qualquer efeito.
+
 ## Onde fica a fila
 
 Num SQLite local: `_dados/jobs.db`, dentro da pasta do site. A pasta `_dados/` nunca é servida e, num app
