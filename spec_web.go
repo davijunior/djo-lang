@@ -26,6 +26,7 @@ func specServer(c *specCtx, line int) *Server {
 	s.dbRoot = c.dbRoot
 	s.mailBox = c.mails
 	s.httpMock = c.http
+	s.limiter = c.lim
 	s.jobs.be = c.jobs
 	s.maxSteps = specMaxSteps
 	c.server = s

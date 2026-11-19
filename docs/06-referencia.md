@@ -137,6 +137,15 @@ nunca serve esses arquivos, então ninguém os baixa pela URL.
 
 Veja [Web](04-web.md).
 
+## Limit
+
+| Chamada | Faz |
+|---|---|
+| `Limit.enforce:chave:quantas:janela` | (só em página) conta e, passando do limite, responde 429 com `Retry-After` e para a página; aceita um 4º argumento `{"body": ..., "headers": {...}}` |
+| `Limit.take:chave:quantas:janela` | conta e devolve `{allowed, remaining, retry_after_s, reason}` (`reason` é `"cheio"` quando a tabela de chaves está cheia) |
+
+Janela deslizante, em memória do processo, chave guardada como SHA-256. Veja [Web](04-web.md#limite-de-uso-por-chave-limit).
+
 ## Serial
 
 Porta serial para sensores e placas. Veja [Hardware](08-iot.md).

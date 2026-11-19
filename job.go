@@ -547,6 +547,7 @@ func (e *jobEngine) execute(j *jobRow) (bool, error) {
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
 	in.httpMock = s.httpMock
+	in.limiter = s.limiter
 	if err := in.loadCore(s.root); err != nil {
 		return false, err
 	}

@@ -210,6 +210,39 @@ func parseHTTPMockResp(v any, line int) *httpMockResp {
 	return r
 }
 
+// maskBody esconde, num corpo JSON, o valor dos campos sensíveis (em qualquer profundidade). Corpo que não é JSON fica como está.
+func maskBody(body string) string {
+	v, err := jsonDecode(body)
+	if err != nil {
+		return body
+	}
+	var walk func(x any) any
+	walk = func(x any) any {
+		switch t := x.(type) {
+		case *Map:
+			for i, k := range t.Keys {
+				if ks, ok := k.(string); ok && (sensitiveName(ks) || sensitiveBodyName(ks)) {
+					t.Vals[i] = "***"
+				} else {
+					t.Vals[i] = walk(t.Vals[i])
+				}
+			}
+		case *Array:
+			for i := range t.Items {
+				t.Items[i] = walk(t.Items[i])
+			}
+		}
+		return x
+	}
+	return jsonEncode(walk(v), "", 0)
+}
+
+// sensitiveBodyName: campos de corpo que levam credencial e não casam com os nomes de cabeçalho (app_key do Omie).
+func sensitiveBodyName(n string) bool {
+	n = strings.ToLower(n)
+	return n == "app_key" || n == "app_secret" || n == "client_secret" || n == "private_key"
+}
+
 func maskedHeaders(h [][2]string, mask bool) *Map {
 	m := newMap()
 	for _, kv := range h {
@@ -235,7 +268,11 @@ func (m *httpMockSet) callList(raw bool) *Array {
 			e.set("url", redactURL(c.url))
 		}
 		e.set("headers", maskedHeaders(c.headers, !raw))
-		e.set("body", c.body)
+		if raw {
+			e.set("body", c.body)
+		} else {
+			e.set("body", maskBody(c.body))
+		}
 		out.Items = append(out.Items, e)
 	}
 	return out

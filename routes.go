@@ -542,6 +542,7 @@ func (s *Server) serveRoutes(w http.ResponseWriter, r *http.Request, t *routeTab
 			allow = append(allow, rt.method)
 			continue
 		}
+		metaOf(r).route = rt.raw
 		if rt.action != "" {
 			if release := s.lane.acquire(w, r); release != nil {
 				defer release()
