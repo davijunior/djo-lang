@@ -321,6 +321,9 @@ Dados do visitante guardados no servidor, ligados a um cookie (`djo_sid`: `HttpO
 - Só cabem dados simples: texto, números, `Bool`, `Arr` e `Map` (nada de structs). Guarde
   o `id` do usuário e busque o resto no banco.
 - Limite de 64 KB por sessão e 10 mil sessões; expiram após 24 h sem uso.
+- **Ler não cria sessão.** `Session.get`, `Session.del`, `Session.clear` e `Session.verify` de quem não tem sessão devolvem `nil`/`false` e não mandam cookie; só `Session.set`, `Session.renew` e `Session.token:` (o formulário precisa do token) criam. Assim uma página que só consulta o usuário logado não enche o servidor de sessões.
+- **Efeito no `cache` de rota.** Antes, toda página que lia `Session` criava o cookie e a resposta saía com `Cache-Control: private, no-store`, então o `"cache": N` da rota nunca valia para o visitante anônimo. Agora o anônimo que só lê não recebe cookie e a resposta sai `public, max-age=N`: a página fica em cache por até N segundos **mesmo depois de editar ou apagar o conteúdo** (quem tem cookie de sessão vê o novo). É o cache funcionando como declarado. Use `cache` só em páginas que toleram N segundos de atraso.
+- Com 10 mil sessões, uma nova não derruba a página: sai a vencida, senão a mais antiga **sem dados** (só o token), senão a mais antiga de todas.
 - As sessões ficam **na memória**: reiniciar o `djo serve` desloga todo mundo.
 - Atrás de um proxy HTTPS, o cookie recebe `Secure` quando o proxy confiável manda `X-Forwarded-Proto: https` (veja [Produção atrás de um proxy](#produção-atrás-de-um-proxy)).
 
