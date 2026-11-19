@@ -363,6 +363,25 @@ if
     Http.redirect:"/entrar"
 ```
 
+## Limite de uso por chave: `Limit`
+
+O `-agent-rate` limita por IP. Para limitar **por token** (ou por empresa, por consumidor), use `Limit`:
+
+```
+var tok = Http.bearer:
+Limit.enforce:("tok:" + tok):100:60        // 100 chamadas por 60 s; passou: responde 429 e a página PARA
+var r = Limit.take:("tok:" + tok):100:60   // só conta e devolve {allowed, remaining, retry_after_s, reason}
+```
+
+- **`Limit.enforce:chave:quantas:janela`** (só em página): dentro do limite, acrescenta `RateLimit-Remaining` e segue. Fora dele responde **429** com `Retry-After: N` (segundos) e o corpo `{"error": "muitas_requisicoes", "retry_after_s": N}`, e a página termina como no `redirect`. Para o seu formato de erro, passe um 4º argumento: `Limit.enforce:chave:100:60:{"body": {"erro": {...}}, "headers": {"X-Algo": "1"}}` (`body` é texto ou dados, que viram JSON).
+- **`Limit.take`** não responde nada: você decide. `reason` é `nil`, ou `"cheio"` (veja abaixo).
+- `quantas` vai de 1 a 1.000.000; a janela, de 1 s a 24 h (em segundos). É uma janela **deslizante** aproximada (a janela anterior pesa na proporção do que falta dela): não dá para "gastar tudo no fim de uma janela e tudo no início da outra".
+- **Escolha bem a chave.** Use a de quem **já foi autenticado** (token validado, id de empresa). A tabela guarda até 50.000 chaves vivas e **nunca expulsa uma viva**: se um atacante inventar chaves (IPs, e-mails digitados) até encher, quem chega depois recebe `"cheio"` (o `enforce` responde **503** com `Retry-After: 1`). Chave que o visitante escolhe é a que não deve alimentar o `Limit`.
+- A chave é guardada só como SHA-256: o token não fica na memória do contador.
+- **Os contadores ficam na memória do processo:** somem se o servidor reinicia e **não valem entre várias instâncias** do `djo serve`. (Um job que roda no mesmo `djo serve` conta nos mesmos contadores.)
+- Numa rota com `cache` (resposta guardada e servida sem rodar a página), o limite só conta nas execuções de verdade; não use `Limit` em rota cacheada.
+- No `djo spec`, cada teste começa com os contadores zerados; `Spec.limit_reset:` zera no meio do teste.
+
 ## Senhas e valores aleatórios: Hash
 
 | Chamada                   | Faz |

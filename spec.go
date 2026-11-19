@@ -37,6 +37,7 @@ type specCtx struct {
 	mails  *mailBox
 	jobs   *specJobBox
 	http   *httpMockSet
+	lim    *limiter
 	server any // *Server, criado na primeira chamada de rota (spec_web.go)
 }
 
@@ -575,8 +576,9 @@ func specRun(root, file string, prog []Stmt, fn, desc, lang string) (res specRes
 	in.maxSteps = specMaxSteps
 	in.deadline = time.Now().Add(specTimeout)
 	in.served = true
-	in.spec = &specCtx{root: root, file: file, lang: lang, dbRoot: tmp, mails: &mailBox{}, jobs: &specJobBox{}, http: &httpMockSet{}}
+	in.spec = &specCtx{root: root, file: file, lang: lang, dbRoot: tmp, mails: &mailBox{}, jobs: &specJobBox{}, http: &httpMockSet{}, lim: &limiter{}}
 	in.httpMock = in.spec.http
+	in.limiter = in.spec.lim
 	defer in.closeTx()
 	defer func() {
 		if in.spec != nil {

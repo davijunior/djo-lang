@@ -54,6 +54,7 @@ type Server struct {
 	mailSend     bool         // -dev: Mail.send envia de verdade em vez de gravar o .eml
 	mailBox      *mailBox     // o djo spec: captura os e-mails
 	httpMock     *httpMockSet // o djo spec: Http simulado
+	limiter      *limiter     // o djo spec: contadores do Limit
 	dbRoot       string       // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
 }
 
@@ -277,6 +278,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
 	in.httpMock = s.httpMock
+	in.limiter = s.limiter
 	in.job = s.jobHost()
 	if err := in.loadCore(s.root); err != nil {
 		s.serverError(w, r, err)

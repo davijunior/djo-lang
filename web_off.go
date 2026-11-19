@@ -29,6 +29,7 @@ func init() {
 		"Http":    {"method", "path", "query", "param", "args", "form", "header", "bearer", "setheader", "status", "redirect", "cookie", "setcookie", "body", "json", "file", "upload", "ip"},
 		"Route":   {"get", "post", "put", "patch", "delete", "static", "site"},
 		"Page":    {"headers"},
+		"Limit":   {"enforce"},
 		"Session": {"get", "set", "del", "clear", "destroy", "renew", "token", "verify"},
 	}
 	for ns, list := range names {

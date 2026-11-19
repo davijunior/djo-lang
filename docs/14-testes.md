@@ -125,6 +125,7 @@ A negação existe só em `not_eq`. Para negar os outros, confira uma condição
 | `Spec.emails:` | a lista dos e-mails que o `Mail.send` "enviou" neste teste (nada sai de verdade); veja [E-mail](15-email.md) |
 | `Spec.jobs:` `Spec.run_jobs:` `Spec.run_job:id` | os jobs que o `Job.run` enfileirou no teste (nada roda sozinho) e a execução síncrona deles; veja [Jobs](16-jobs.md) |
 | `Spec.agenda:` | a agenda do `agenda.djo` |
+| `Spec.limit_reset:` | zera os contadores do `Limit` neste teste (cada teste já começa limpo); veja [Limit](04-web.md#limite-de-uso-por-chave-limit) |
 | `Spec.http_mock:"GET":"https://api.x.com/a":{"status": 200, "json": {...}}` `Spec.http_calls:` `Spec.http_calls_raw:` `Spec.http_mock_clear:` | respostas simuladas para o `Http.*` (nada sai pela rede); veja [Mock de Http](#mock-de-http) |
 | `Spec.lang:` | `"pt"` ou `"en"`, o idioma do relatório |
 | `Spec.get:"/caminho"` `Spec.delete:"/caminho"` | chama uma rota, action ou página do site, em processo |
