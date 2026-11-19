@@ -64,6 +64,9 @@ func TestErrosComunsTemCodigoEDica(t *testing.T) {
 			t.Errorf("%s: faltou %q em %q", c.nome, c.frag, de.Msg)
 		}
 	}
+	if err := runDjo(t, nil, "var x = 1\nprint y\n"); err == nil || strings.Contains(err.Error(), "quer dizer") {
+		t.Errorf("y não deve sugerir x: %v", err)
+	}
 	// sem nada parecido, nenhuma sugestão
 	if err := runDjo(t, nil, "print qqqqqqqq\n"); strings.Contains(err.Error(), "quer dizer") {
 		t.Errorf("sugeriu sem ter nome parecido: %v", err)
@@ -77,6 +80,18 @@ func TestQuerDizerSoSugereNomesVisiveis(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	if got := didYouMean("xyz", []string{"abc", "def"}); got != "" {
+		t.Errorf("%q", got)
+	}
+	if got := didYouMean("y", []string{"x", "z"}); got != "" {
+		t.Errorf("nome curto não sugere: %q", got)
+	}
+	if got := didYouMean("ab", []string{"ac"}); got != "" {
+		t.Errorf("%q", got)
+	}
+	if got := didYouMean("totl", []string{"total", "x"}); got != " (quer dizer 'total'?)" {
+		t.Errorf("%q", got)
+	}
+	if got := didYouMean("abc", []string{"axy"}); got != "" { // 3 letras: só distância 1
 		t.Errorf("%q", got)
 	}
 	if got := didYouMean("lenn", []string{"len", "lens"}); got != " (quer dizer 'len'?)" {

@@ -250,7 +250,7 @@ O valor é o `return` do `success` (se deu certo), ou o `return` do `error` (se 
 | `code` | `"erro"` nos erros da própria djo (tipo errado, índice fora, divisão por zero, banco...), **menos** os que têm código próprio (tabela abaixo); nos erros que você lança, o código que você deu |
 | `data` | `nil` nos erros da djo; nos seus, os dados que você mandou |
 | `file` | o arquivo **onde o erro nasceu**: `"core/clientes.djo"` se foi numa função do `core/`, `"boosters/nome"` num booster, `nil` se foi direto na página ou no script. (Até a v0.10 só o booster aparecia aqui; quem testava `file == nil` para o core precisa rever.) `line` é a linha **nesse** arquivo |
-| `stack` | a pilha de chamadas, da função onde nasceu até a mais externa: `[{"fn", "file", "line"}, ...]` (no máximo 8; vazia se o erro nasceu fora de qualquer função). É para depurar: **não a mostre ao visitante** |
+| `stack` | a pilha de chamadas, da função onde nasceu até a mais externa: `[{"fn", "file", "line"}, ...]` (no máximo 8; vazia se o erro nasceu fora de qualquer função). É para depurar: **não a mostre ao visitante** (ela traz caminhos do projeto, como `core/clientes.djo`; quem imprime o `err` inteiro numa página pública expõe esses caminhos) |
 
 Em produção a resposta 500 nunca mostra a pilha nem caminhos. Ela aparece no log do servidor, em `djo serve -dev` e na saída de `djo arquivo.djo`:
 

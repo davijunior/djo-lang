@@ -58,8 +58,12 @@ func editDistance(a, b string) int {
 // didYouMean devolve " (quer dizer 'x'?)" com o nome mais parecido dos que o usuário já pode ver ("" se nenhum).
 func didYouMean(name string, cands []string) string {
 	sort.Strings(cands)
+	n := len([]rune(name))
+	if n <= 2 { // nome curto: qualquer letra solta "parece" com outra, a sugestão vira ruído
+		return ""
+	}
 	max := 2
-	if len([]rune(name)) <= 4 {
+	if n <= 4 {
 		max = 1
 	}
 	best, bestD := "", max+1
