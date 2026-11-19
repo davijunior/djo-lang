@@ -63,16 +63,38 @@ func ephemeralKey() *cryptoKey {
 	return specKey
 }
 
+// codedErr é um erro com código estável (vira err["code"] quando o Crypto falha numa página ou job).
+type codedErr struct{ code, msg string }
+
+func (e *codedErr) Error() string { return e.msg }
+
+// cryptoStr: o primeiro argumento tem de ser texto (senão, crypto_input_invalid).
+func cryptoStr(a []any, line int, fn string) string {
+	s, ok := a[0].(string)
+	if !ok {
+		failc(line, "crypto_input_invalid", "%s espera um texto, mas recebeu %s", fn, typeName(a[0]))
+	}
+	return s
+}
+
+// cryptoFail lança o erro de uma chamada do Crypto, com o código do erro de chave se houver.
+func cryptoFail(line int, fn string, err error) {
+	if ce, ok := err.(*codedErr); ok {
+		failc(line, ce.code, "%s: %v", fn, err)
+	}
+	failc(line, "crypto_input_invalid", "%s: %v", fn, err)
+}
+
 // cryptoKeys devolve a chave atual e as antigas. Erro (sem mostrar valores) se faltar ou estiver malformada.
 func (in *Interp) cryptoKeys() (cur *cryptoKey, old []*cryptoKey, err error) {
 	if v := os.Getenv(cryptoKeyVar); strings.TrimSpace(v) != "" {
 		if cur, err = cryptoKeyFrom(v); err != nil {
-			return nil, nil, fmt.Errorf("%s está malformada: %v (gere uma com: djo crypto newkey)", cryptoKeyVar, err)
+			return nil, nil, &codedErr{"crypto_key_invalid", fmt.Sprintf("%s está malformada: %v (gere uma com: djo crypto newkey)", cryptoKeyVar, err)}
 		}
 	} else if in != nil && in.spec != nil {
 		cur = ephemeralKey()
 	} else {
-		return nil, nil, fmt.Errorf("defina %s no ambiente do servidor (32 bytes em hexadecimal; gere uma com: djo crypto newkey)", cryptoKeyVar)
+		return nil, nil, &codedErr{"crypto_key_missing", fmt.Sprintf("defina %s no ambiente do servidor (32 bytes em hexadecimal; gere uma com: djo crypto newkey)", cryptoKeyVar)}
 	}
 	for _, s := range strings.Split(os.Getenv(cryptoOldVar), ",") {
 		if strings.TrimSpace(s) == "" {
@@ -80,7 +102,7 @@ func (in *Interp) cryptoKeys() (cur *cryptoKey, old []*cryptoKey, err error) {
 		}
 		k, e := cryptoKeyFrom(s)
 		if e != nil {
-			return nil, nil, fmt.Errorf("%s tem uma chave malformada: %v", cryptoOldVar, e)
+			return nil, nil, &codedErr{"crypto_key_invalid", fmt.Sprintf("%s tem uma chave malformada: %v", cryptoOldVar, e)}
 		}
 		old = append(old, k)
 	}
@@ -144,52 +166,52 @@ func init() {
 		}
 		c, ok := a[1].(string)
 		if !ok {
-			fail(line, "%s: o contexto é um texto, como \"empresa:42\"", fn)
+			failc(line, "crypto_input_invalid", "%s: o contexto é um texto, como \"empresa:42\"", fn)
 		}
 		return c
 	}
 	ns["seal"] = builtin{-1, func(in *Interp, env *Env, line int, a []any) any {
 		if len(a) < 1 || len(a) > 2 {
-			fail(line, "Crypto.seal espera (texto) ou (texto, contexto)")
+			failc(line, "crypto_input_invalid", "Crypto.seal espera (texto) ou (texto, contexto)")
 		}
-		text := argStr(a, 0, line, "Crypto.seal")
+		text := cryptoStr(a, line, "Crypto.seal")
 		ctx := ctxArg(a, line, "Crypto.seal")
 		if len(text) > cryptoMaxText {
-			fail(line, "Crypto.seal: o texto passa de %d KB", cryptoMaxText>>10)
+			failc(line, "crypto_input_invalid", "Crypto.seal: o texto passa de %d KB", cryptoMaxText>>10)
 		}
 		cur, _, err := in.cryptoKeys()
 		if err != nil {
-			fail(line, "Crypto.seal: %v", err)
+			cryptoFail(line, "Crypto.seal", err)
 		}
 		out, err := cryptoSeal(cur, text, ctx)
 		if err != nil {
-			fail(line, "Crypto.seal: não consegui cifrar")
+			failc(line, "crypto_seal_failed", "Crypto.seal: não consegui cifrar")
 		}
 		return out
 	}}
 	ns["open"] = builtin{-1, func(in *Interp, env *Env, line int, a []any) any {
 		if len(a) < 1 || len(a) > 2 {
-			fail(line, "Crypto.open espera (cifrado) ou (cifrado, contexto)")
+			failc(line, "crypto_input_invalid", "Crypto.open espera (cifrado) ou (cifrado, contexto)")
 		}
-		sealed := argStr(a, 0, line, "Crypto.open")
+		sealed := cryptoStr(a, line, "Crypto.open")
 		ctx := ctxArg(a, line, "Crypto.open")
 		parts := strings.SplitN(sealed, ".", 3)
 		if len(parts) != 3 || parts[0] != cryptoFormatTag {
-			fail(line, "Crypto.open: formato não reconhecido")
+			failc(line, "crypto_input_invalid", "Crypto.open: formato não reconhecido")
 		}
 		cur, old, err := in.cryptoKeys()
 		if err != nil {
-			fail(line, "Crypto.open: %v", err)
+			cryptoFail(line, "Crypto.open", err)
 		}
 		for _, k := range append([]*cryptoKey{cur}, old...) {
 			if k.id == parts[1] {
 				if plain, ok := cryptoOpen(k, parts[2], ctx); ok {
 					return plain
 				}
-				fail(line, "Crypto.open: não consegui abrir (chave errada, contexto diferente ou texto alterado)")
+				failc(line, "crypto_open_failed", "Crypto.open: não consegui abrir (chave errada, contexto diferente ou texto alterado)")
 			}
 		}
-		fail(line, "Crypto.open: não achei a chave deste texto (a chave foi trocada? veja %s)", cryptoOldVar)
+		failc(line, "crypto_key_unknown", "Crypto.open: não achei a chave deste texto (a chave foi trocada? veja %s)", cryptoOldVar)
 		return nil
 	}}
 }

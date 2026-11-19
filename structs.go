@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
 
 // Instance é um objeto criado a partir de uma struct. Tem semântica de
 // referência: duas variáveis podem apontar para o mesmo objeto.
@@ -284,7 +288,7 @@ func (in *Interp) methodCall(n *MethodCall, env *Env) any {
 				in.checkPerm(id.Name, n.Line)
 				b, ok := ns[n.Name]
 				if !ok {
-					fail(n.Line, "%s não tem a função '%s'", id.Name, n.Name)
+					failc(n.Line, codeUnknownMember, "%s não tem a função '%s'%s", id.Name, n.Name, didYouMean(n.Name, nsFuncNames(id.Name)))
 				}
 				if b.args >= 0 && len(n.Args) != b.args {
 					fail(n.Line, "%s.%s espera %d argumento(s), recebeu %d", id.Name, n.Name, b.args, len(n.Args))
@@ -305,7 +309,12 @@ func (in *Interp) methodCall(n *MethodCall, env *Env) any {
 			if _, shadow := env.get(id.Name); !shadow {
 				fd, ok := bo.funcs[n.Name]
 				if !ok {
-					fail(n.Line, "o booster %s não tem a função '%s'", id.Name, n.Name)
+					var exposed []string
+					for k := range bo.funcs {
+						exposed = append(exposed, k)
+					}
+					sort.Strings(exposed)
+					failc(n.Line, codeBoosterFn, "o booster %s não tem a função '%s'; ele expõe: %s%s", id.Name, n.Name, strings.Join(exposed, ", "), didYouMean(n.Name, exposed))
 				}
 				return in.invoke(fd, id.Name+"."+n.Name, n.Args, env, nil, n.Line)
 			}

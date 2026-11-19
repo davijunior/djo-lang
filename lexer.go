@@ -207,7 +207,7 @@ func Lex(src string) ([]Token, error) {
 					case '\\':
 						sb.WriteRune('\\')
 					default:
-						return nil, &djoError{Line: line, Msg: fmt.Sprintf("escape inválido '\\%c' na string", e)}
+						return nil, &djoError{Line: line, Code: codeInvalidEscape, Msg: fmt.Sprintf("escape inválido '\\%c' na string (os válidos são %s)", e, validEscapes)}
 					}
 					continue
 				}

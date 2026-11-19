@@ -81,7 +81,7 @@ func versionInfo() string {
 func runFile(path string) int {
 	src, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err.Error()+errTrace(err))
 		return 1
 	}
 	var prog []Stmt
@@ -98,7 +98,7 @@ func runFile(path string) int {
 		}
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err.Error()+errTrace(err))
 		return 1
 	}
 	return 0
