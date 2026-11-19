@@ -28,7 +28,71 @@ const (
 	clientTimeout   = 8 * time.Second
 	clientMaxBody   = 5 << 20
 	clientMaxServer = 5 // chamadas por página dentro do 'djo serve'
+
+	// timeout por chamada (último argumento opcional do Http.*): piso e tetos por contexto
+	clientTimeoutMin    = 1 * time.Second
+	clientTimeoutJob    = 60 * time.Second // job e djo spec/script
+	clientTimeoutPage   = 20 * time.Second // página e action servidas
+	clientPageWaitTotal = 25 * time.Second // soma das esperas de Http de uma página (o servidor corta em 30 s)
 )
+
+// fmtSecs: 8 s, 1,5 s.
+func fmtSecs(d time.Duration) string {
+	if d%time.Second == 0 {
+		return fmt.Sprintf("%d s", int(d/time.Second))
+	}
+	return strings.Replace(fmt.Sprintf("%.1f s", d.Seconds()), ".", ",", 1)
+}
+
+// httpTimeout escolhe o prazo desta chamada: o pedido (ou 8 s), dentro do teto do contexto, do que
+// resta do prazo do job e do que resta da cota de espera da página.
+func (in *Interp) httpTimeout(fn string, v any, given bool, line int) time.Duration {
+	isJob := in.job != nil && in.job.inJob && in.spec == nil
+	page := in.served && !isJob
+	d := clientTimeout
+	if given {
+		switch x := v.(type) {
+		case int64:
+			d = time.Duration(x) * time.Second
+		case string:
+			var ok bool
+			if d, ok = parseJobDur(x); !ok {
+				fail(line, "%s: o timeout é um número de segundos ou um texto como \"30s\" ou \"2m\", mas recebeu %q", fn, x)
+			}
+		default:
+			fail(line, "%s: o timeout é um número de segundos ou um texto como \"30s\", mas recebeu %s", fn, typeName(v))
+		}
+		max := clientTimeoutJob
+		if page {
+			max = clientTimeoutPage
+		}
+		if d < clientTimeoutMin {
+			fail(line, "%s: o timeout mínimo é %s", fn, fmtSecs(clientTimeoutMin))
+		}
+		if d > max {
+			fail(line, "%s: o timeout máximo aqui é %s", fn, fmtSecs(max))
+		}
+	}
+	if !in.deadline.IsZero() && isJob {
+		left := time.Until(in.deadline)
+		if left <= 0 {
+			failFatal(line, "o job passou do tempo limite (timeout) e foi interrompido")
+		}
+		if left < d {
+			d = left
+		}
+	}
+	if page {
+		left := clientPageWaitTotal - in.outWaited
+		if left <= 0 {
+			failFatal(line, "%s: a página já esperou %s por chamadas externas (o máximo da soma)", fn, fmtSecs(clientPageWaitTotal))
+		}
+		if left < d {
+			d = left
+		}
+	}
+	return d
+}
 
 // blockedIP: endereços internos, que uma página servida não deve alcançar (SSRF).
 func blockedIP(ip net.IP) bool {
@@ -42,8 +106,8 @@ func blockedIP(ip net.IP) bool {
 		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified()
 }
 
-func newHTTPClient(restrict bool) *http.Client {
-	d := &net.Dialer{Timeout: clientTimeout}
+func newHTTPClient(restrict bool, timeout time.Duration) *http.Client {
+	d := &net.Dialer{Timeout: timeout}
 	if restrict {
 		d.Control = func(network, address string, _ syscall.RawConn) error {
 			host, _, err := net.SplitHostPort(address)
@@ -56,13 +120,13 @@ func newHTTPClient(restrict bool) *http.Client {
 			return nil
 		}
 	}
-	tr := &http.Transport{DialContext: d.DialContext, TLSHandshakeTimeout: clientTimeout, MaxIdleConns: 0, DisableKeepAlives: true}
+	tr := &http.Transport{DialContext: d.DialContext, TLSHandshakeTimeout: timeout, MaxIdleConns: 0, DisableKeepAlives: true}
 	if !restrict {
 		tr.Proxy = http.ProxyFromEnvironment
 	}
 	return &http.Client{
 		Transport: tr,
-		Timeout:   clientTimeout,
+		Timeout:   timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("redirecionamentos demais")
@@ -114,9 +178,15 @@ func (in *Interp) httpDo(method, fn string, a []any, line int) any {
 			fail(line, "%s: o corpo é String ou dados (Map, Arr), mas recebeu %s", fn, typeName(a[1]))
 		}
 	}
-	if len(a) > argHeaders+1 {
+	if len(a) > argHeaders+2 {
 		fail(line, "%s recebeu argumentos demais", fn)
 	}
+	timeout := in.httpTimeout(fn, func() any {
+		if len(a) > argHeaders+1 {
+			return a[argHeaders+1]
+		}
+		return nil
+	}(), len(a) > argHeaders+1, line)
 
 	if in.served {
 		max := clientMaxServer
@@ -140,7 +210,7 @@ func (in *Interp) httpDo(method, fn string, a []any, line int) any {
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	if len(a) > argHeaders {
+	if len(a) > argHeaders && a[argHeaders] != nil {
 		hm, ok := a[argHeaders].(*Map)
 		if !ok {
 			fail(line, "%s: os cabeçalhos vão num Map, como {\"Authorization\": \"...\"}", fn)
@@ -157,11 +227,22 @@ func (in *Interp) httpDo(method, fn string, a []any, line int) any {
 		}
 	}
 
-	resp, err := newHTTPClient(in.served).Do(req)
+	started := time.Now()
+	resp, err := newHTTPClient(in.served, timeout).Do(req)
+	elapsed := time.Since(started)
+	if in.served {
+		in.outWaited += elapsed
+	}
 	if err != nil {
+		if in.job != nil && in.job.inJob && in.spec == nil && !in.deadline.IsZero() && !time.Now().Before(in.deadline) {
+			failFatal(line, "o job passou do tempo limite (timeout) e foi interrompido (no meio de %s)", fn)
+		}
 		msg := err.Error()
 		if e, ok := err.(*url.Error); ok {
 			msg = e.Err.Error()
+			if e.Timeout() {
+				msg = "tempo esgotado (" + fmtSecs(timeout) + ")"
+			}
 		}
 		if i := strings.Index(msg, "endereço interno bloqueado"); i >= 0 {
 			msg = msg[i:]

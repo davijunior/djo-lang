@@ -352,6 +352,10 @@ func serveCmd(args []string) int {
 			jobsHTTPSet = true
 		}
 	})
+	if err := checkCryptoEnv(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
 	if err := configureJobsHTTP(*jobsHTTP, jobsHTTPSet, os.Getenv("DJO_JOBS_HTTP")); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2

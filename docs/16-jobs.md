@@ -240,6 +240,8 @@ DJO_JOBS_HTTP=100 djo serve meusite
 - Cada chamada ainda tem o tempo máximo dela e o `timeout` do job corta o conjunto; 200 chamadas lentas não cabem em 60 s. Para sincronizar um ERP com muitas páginas, suba o `timeout` do job (até 15 min) junto com o `-jobs-http`, ou divida o trabalho em vários jobs (cada um com a sua cota), por exemplo um job por página.
 - No `djo spec` o `Http` não tem esse limite.
 
+**Timeout de cada chamada.** `Http.get:url:nil:30` (ou `"30s"`) escolhe o prazo da chamada: de 1 a 60 s, e nunca mais do que resta do `timeout` do job (o padrão sem o argumento é 8 s). Se o prazo do job acaba no meio da chamada, o job é interrompido como em qualquer estouro de `timeout`. Veja [Http](04-web.md#chamando-outros-serviços-httpget-e-httppost).
+
 ## Limites
 
 | | |

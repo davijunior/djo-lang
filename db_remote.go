@@ -51,6 +51,10 @@ func expandEnv(s string) (string, error) {
 	whole := envRef.MatchString(s) && envRef.FindString(s) == s
 	out := envRef.ReplaceAllStringFunc(s, func(m string) string {
 		name := envRef.FindStringSubmatch(m)[1]
+		if cryptoReserved(name) {
+			missing = append(missing, name+" (reservada: guarda a chave do Crypto)")
+			return ""
+		}
 		v, ok := os.LookupEnv(name)
 		if !ok || v == "" {
 			missing = append(missing, name)
