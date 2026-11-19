@@ -105,6 +105,7 @@ type Interp struct {
 	serial          serialState
 	served          bool          // páginas servidas não alcançam endereços internos
 	outCalls        int           // chamadas externas feitas nesta página
+	httpMock        *httpMockSet  // o djo spec: respostas de Http simuladas (nil fora do spec)
 	outWaited       time.Duration // tempo já esperado em chamadas externas nesta página
 	slept           int64         // ms de Time.sleep nesta página (servidor)
 	wrote           int           // bytes gravados por File.* nesta página (servidor)

@@ -125,6 +125,7 @@ A negação existe só em `not_eq`. Para negar os outros, confira uma condição
 | `Spec.emails:` | a lista dos e-mails que o `Mail.send` "enviou" neste teste (nada sai de verdade); veja [E-mail](15-email.md) |
 | `Spec.jobs:` `Spec.run_jobs:` `Spec.run_job:id` | os jobs que o `Job.run` enfileirou no teste (nada roda sozinho) e a execução síncrona deles; veja [Jobs](16-jobs.md) |
 | `Spec.agenda:` | a agenda do `agenda.djo` |
+| `Spec.http_mock:"GET":"https://api.x.com/a":{"status": 200, "json": {...}}` `Spec.http_calls:` `Spec.http_calls_raw:` `Spec.http_mock_clear:` | respostas simuladas para o `Http.*` (nada sai pela rede); veja [Mock de Http](#mock-de-http) |
 | `Spec.lang:` | `"pt"` ou `"en"`, o idioma do relatório |
 | `Spec.get:"/caminho"` `Spec.delete:"/caminho"` | chama uma rota, action ou página do site, em processo |
 | `Spec.post:"/caminho":corpo` `put` `patch` | o mesmo, com corpo |
@@ -137,6 +138,26 @@ A negação existe só em `not_eq`. Para negar os outros, confira uma condição
 `Spec.get`, `post`, `put`, `patch` e `delete` passam a requisição direto pelo servidor do projeto, **sem abrir porta**. Valem as mesmas regras de um acesso de verdade: `rotas.djo`, páginas, actions, `core/`, CORS, o tráfego de agentes e as respostas de erro. O corpo de um mapa ou lista vai como JSON; um texto vai como formulário (`"titulo=x&n=1"`) e você pode trocar o `Content-Type` nos cabeçalhos. O caminho começa com `/` e é sempre local (`http://...` é recusado).
 
 A resposta é um mapa: `{"status": 201, "body": "...", "headers": {"Content-Type": "..."}}`. Use `Json.decode:r["body"]`, ou os matchers `status` e `json`.
+
+## Mock de Http
+
+Dentro do `djo spec` o `Http.get/post/put/delete` pode responder com o que você combinar, sem rede. Vale para o teste, para as páginas (`Spec.get`...), para os jobs (`Spec.run_jobs:`) e para os boosters.
+
+```
+Spec.http_mock:"GET":"https://api.exemplo.com/itens*":[{"status": 500}, {"json": {"itens": []}}]
+Spec.http_mock:"POST":"https://api.omie.com.br/x/":{"json_has": {"call": "ListarContas"}}:{"json": {"ok": 1}}
+Spec.http_mock:"GET":"https://api.exemplo.com/lenta":{"delay_ms": 7000}
+Spec.http_mock:"GET":"https://api.exemplo.com/fora":{"timeout": true}
+var chamadas = Spec.http_calls:
+```
+
+- **Casamento:** método (`GET`, `POST`, `PUT`, `DELETE`) e URL **exata** (com a query); um `*` no fim da URL casa qualquer continuação. Vale o primeiro mock que casa, na ordem em que foram escritos.
+- **Condição de corpo (opcional, antes da resposta):** `{"body_contains": "trecho"}` e/ou `{"json_has": {"campo": valor}}` (o corpo enviado é JSON e contém esses campos, também dentro de mapas; listas têm de ser iguais). Serve para APIs que usam a mesma URL para tudo.
+- **Resposta:** `status` (100 a 599, padrão 200), `body` (texto) **ou** `json` (qualquer dado; vira o corpo com `Content-Type: application/json`), `headers` (mapa de textos). O resultado é o do `Http` de verdade (`ok` é verdadeiro de 200 a 299). Uma **lista** de respostas atende uma por chamada; a última se repete.
+- **Falhas de rede:** `{"timeout": true}` e `{"error": "texto"}` devolvem `ok: false, status: 0` (o timeout, com `tempo esgotado (N s)`). `delay_ms` é um atraso **simulado**: o teste não espera. Ele conta na cota de espera da página (25 s) e, se for igual ou maior que o timeout da chamada, vira `tempo esgotado`.
+- **Sem rede de verdade:** depois do primeiro `Spec.http_mock`, uma chamada que não casa com nenhum mock é um **erro** (`sem mock para GET ...`), nunca vai para a rede. Antes de qualquer mock, o `Http` age como sempre. `Spec.http_mock_clear:` desliga tudo.
+- **O que foi chamado:** `Spec.http_calls:` devolve `[{method, url, headers, body}]`. Cabeçalhos sensíveis (`Authorization`, `Cookie`, e nomes com `token`, `secret`, `key`...) saem como `***`, e a URL sai sem a senha (`user:***@`) e sem o valor de `?token=`. **O `body` sai como foi enviado**: se ele leva credencial (como o `app_secret` do Omie), não o imprima. `Spec.http_calls_raw:` devolve tudo sem máscara, para conferir o cabeçalho de verdade.
+- Os mocks e as chamadas zeram a cada teste. Os limites de chamadas (5 por página, `-jobs-http` por job) valem também para as simuladas. Não existe nos builds `nonet`.
 
 ## Limites (o que o `djo spec` não faz)
 

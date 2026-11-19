@@ -726,6 +726,7 @@ var specRunJobs = func(in *Interp, c *specCtx, only int64, line int) any {
 		child := newJobInterp(in.root, in.dbRoot, &jobOut{}, next.req.Timeout, host)
 		child.maxSteps = specMaxSteps
 		child.spec = c
+		child.httpMock = c.http
 		var err error
 		if lerr := child.loadCore(in.root); lerr != nil {
 			err = lerr

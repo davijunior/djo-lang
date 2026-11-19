@@ -498,6 +498,7 @@ func (s *Server) runAction(w http.ResponseWriter, r *http.Request, t *routeTable
 	in.maxSteps = s.maxSteps
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
+	in.httpMock = s.httpMock
 	in.job = s.jobHost()
 	if err := in.loadCore(s.root); err != nil {
 		s.agentError(w, r, err)

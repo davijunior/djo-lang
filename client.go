@@ -160,7 +160,7 @@ func (in *Interp) httpDo(method, fn string, a []any, line int) any {
 	}
 
 	var body io.Reader
-	contentType := ""
+	bodyStr, contentType := "", ""
 	hasBody := method == "POST" || method == "PUT"
 	argHeaders := 1
 	if hasBody {
@@ -171,9 +171,10 @@ func (in *Interp) httpDo(method, fn string, a []any, line int) any {
 		switch b := a[1].(type) {
 		case nil:
 		case string:
-			body, contentType = strings.NewReader(b), "text/plain; charset=utf-8"
+			body, bodyStr, contentType = strings.NewReader(b), b, "text/plain; charset=utf-8"
 		case *Map, *Array, *Instance:
-			body, contentType = strings.NewReader(jsonEncode(b, "", line)), "application/json"
+			bodyStr = jsonEncode(b, "", line)
+			body, contentType = strings.NewReader(bodyStr), "application/json"
 		default:
 			fail(line, "%s: o corpo é String ou dados (Map, Arr), mas recebeu %s", fn, typeName(a[1]))
 		}
@@ -227,6 +228,9 @@ func (in *Interp) httpDo(method, fn string, a []any, line int) any {
 		}
 	}
 
+	if in.httpMock.isArmed() { // djo spec com Spec.http_mock: nada sai pela rede
+		return in.httpMockServe(in.httpMock, method, fn, rawURL, u, req.Header, bodyStr, timeout, line)
+	}
 	started := time.Now()
 	resp, err := newHTTPClient(in.served, timeout).Do(req)
 	elapsed := time.Since(started)
@@ -246,6 +250,9 @@ func (in *Interp) httpDo(method, fn string, a []any, line int) any {
 		}
 		if i := strings.Index(msg, "endereço interno bloqueado"); i >= 0 {
 			msg = msg[i:]
+			if in.httpMock != nil {
+				msg += "; no djo spec use Spec.http_mock para simular a resposta"
+			}
 		}
 		return clientResult(false, 0, "", newMap(), msg)
 	}
