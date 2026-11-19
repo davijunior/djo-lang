@@ -311,3 +311,17 @@ func TestHTTPMockConcorrente(t *testing.T) {
 		t.Fatalf("calls=%d next=%d", len(set.calls), set.rules[0].next)
 	}
 }
+
+func TestMaskBody(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"call":"X","app_key":"k1","app_secret":"s1","param":[{"senha":"p","n":1,"aninhado":{"token":"t"}}]}`: `{"call": "X", "app_key": "***", "app_secret": "***", "param": [{"senha": "***", "n": 1, "aninhado": {"token": "***"}}]}`,
+		`{"a": 1}`:         `{"a": 1}`,
+		`texto sem json`:   `texto sem json`,
+		`{"Password":"x"}`: `{"Password": "***"}`,
+	} {
+		got := maskBody(in)
+		if strings.ReplaceAll(got, " ", "") != strings.ReplaceAll(want, " ", "") {
+			t.Errorf("%s -> %s (esperado %s)", in, got, want)
+		}
+	}
+}

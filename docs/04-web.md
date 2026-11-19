@@ -165,6 +165,7 @@ Disponível só nas páginas servidas por `djo serve`.
 | `Http.json:`             | corpo lido como JSON (`nil` se inválido) |
 | `Http.file:"campo"`      | arquivo enviado: mapa `{name, size, type}`, ou `nil` |
 | `Http.upload:"campo":"pasta"` | grava o arquivo enviado e devolve o caminho, ou `nil` |
+| `Http.request_id:`       | o id desta requisição (o do log e do cabeçalho `X-Request-Id`; veja [Log do servidor](#log-do-servidor)) |
 | `Http.ip:`               | IP de quem chamou (o real, atrás de um proxy confiável: veja [Produção atrás de um proxy](#produção-atrás-de-um-proxy)) |
 | `Http.get:url` `Http.post:url:corpo` ... | requisições de saída (veja abaixo) |
 | `Http.cookie:"nome"`     | cookie, ou `nil` |
@@ -321,6 +322,20 @@ proxy_set_header X-Real-IP $remote_addr;
 - Valor que não é um IP é ignorado e `Http.ip` cai no IP da conexão. IPv6 funciona; `::ffff:1.2.3.4` vira `1.2.3.4`.
 - O **limite de agentes** (`-agent-rate`, veja [Agentes](10-agentes.md)) usa o mesmo IP: atrás de um proxy confiável ele passa a contar por visitante, e não mais um balde só para todos. Quem tinha ajustado `-agent-rate` para o total, pode reduzi-lo.
 - O `/ask` tem a sua própria lista (`Ask.proxy`), independente de `-trusted-proxy`.
+
+## Log do servidor
+
+Por padrão o `djo serve` escreve uma linha de texto por requisição (`GET /posts 200 3ms`). Para um sistema de log (ou para procurar por id), use JSON:
+
+```
+djo serve -log-format json -log-ip trunc
+```
+
+- `-log-format text|json` (ou `DJO_LOG_FORMAT`; o flag vence o ambiente).
+- `-log-ip trunc|full|off` (ou `DJO_LOG_IP`): o IP é dado pessoal. O padrão `trunc` zera o último byte (`203.0.113.0`; no IPv6, tudo depois do /48), `off` não registra, `full` registra inteiro.
+- Cada linha JSON tem só campos de uma lista fechada: `ts`, `level`, `request_id`, `method`, `route`, `status`, `ms`, `bytes`, `ip`, `error_code` e, nas linhas de erro, `msg` e `stack`. A `route` é o **padrão** da rota (`/clientes/{id}`), nunca a URL: a URL pode ter um token. Query, cabeçalhos, cookies e corpo **nunca** entram.
+- **ID da requisição:** toda resposta leva o cabeçalho `X-Request-Id`. Se o proxy mandou um (de 8 a 64 letras, números, `.`, `_` ou `-`), ele é mantido; senão o servidor cria um (`rq_...`). `Http.request_id:` devolve esse id dentro da página, para você pôr o mesmo id no erro que devolve ao cliente.
+- **Segredos:** a mensagem de erro e a saída dos jobs passam por um depurador que troca por `***` os valores das variáveis de ambiente com `KEY`, `SECRET`, `TOKEN`, `PASS`, `PWD`, `DSN` ou `CREDENTIAL` no nome (e as `DJO_CRYPTO_*`), `Bearer ...`, textos `djo1....` (do `Crypto`), a senha de `usuario:senha@host` e valores depois de `password`, `senha`, `token`, `secret`, `api_key`, `app_key`, `app_secret`. É uma rede de segurança, não uma garantia: **o que o seu código imprime com `print` não é depurado**, e um segredo escrito de outro jeito pode passar. Não ponha segredo em mensagem de erro.
 
 ## Sessões
 
