@@ -596,7 +596,7 @@ func (in *Interp) callBuiltin(b builtin, n *Call, env *Env) any {
 	if b.args >= 0 && len(n.Args) != b.args {
 		extra := ""
 		if len(n.Args) > b.args {
-			extra = "; " + nestedCallHint
+			extra = in.nestedCallSuspect(n.Args, env)
 		}
 		failc(n.Line, codeArity, "'%s' espera %d argumento(s), recebeu %d%s", n.Name, b.args, len(n.Args), extra)
 	}
@@ -615,7 +615,7 @@ func (in *Interp) invoke(fd *FuncDecl, label string, args []Expr, env *Env, self
 	if len(args) != len(fd.Params) {
 		extra := ""
 		if len(args) > len(fd.Params) {
-			extra = "; " + nestedCallHint
+			extra = in.nestedCallSuspect(args, env)
 		}
 		failc(line, codeArity, "'%s' espera %d argumento(s) (%s), recebeu %d%s", label, len(fd.Params), paramList(fd.Params), len(args), extra)
 	}

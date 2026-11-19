@@ -42,7 +42,7 @@ func TestErrosComunsTemCodigoEDica(t *testing.T) {
 		{"texto vezes número", "print \"x\" * 5\n", codeOpTypes, "Text.repeat"},
 		{"lista mais lista", "print [1] + [2]\n", codeOpTypes, "push:lista:item"},
 		{"número mais texto", "print 1 + \"a\"\n", codeOpTypes, "str:número"},
-		{"argumentos demais", "f reg\n    params[a[Int], b[Int]]\n    return a\nprint reg:1:len:\"x\":nil\n", codeArity, "(a, b), recebeu 4; se um dos argumentos é outra chamada"},
+		{"argumentos demais com chamada sem parênteses", "f reg\n    params[a[Int], b[Int]]\n    return a\nprint reg:1:len:\"x\":nil\n", codeArity, "(a, b), recebeu 4; 'len' parece uma chamada usada como argumento"},
 		{"nil indexado", "var l = nil\nprint l[\"valor\"]\n", codeNilIndex, "mas l é nil"},
 		{"nil indexado em membro", "var r = {\"a\": nil}\nprint r[\"a\"][\"b\"]\n", codeNilIndex, "r[\"a\"] é nil"},
 		{"variável com erro de digitação", "var nome = 1\nprint nmoe\n", codeUnknownName, "quer dizer 'nome'?"},
@@ -193,5 +193,33 @@ func TestCodigosDoCrypto(t *testing.T) {
 		if err := runDjo(t, nil, c.src); !errors.As(err, &de) || de.Code != c.code {
 			t.Errorf("%q: %v", c.src, err)
 		}
+	}
+}
+
+// A dica dos parênteses só aparece quando um argumento é mesmo o nome de uma função; senão a mensagem é neutra.
+func TestDicaDeParentesesSoQuandoEOCaso(t *testing.T) {
+	neutros := []string{
+		"var v = 1\nf reg\n    params[a[Int]]\n    return a\nprint reg:1:v\n",
+		"var a = nil\nvar b = nil\nf r\n    params[x[String]]\n    return x\nvar s = r:\"omie:\" + str:(a ?? \"x\") + \":\" + str:(b ?? \"\")\n",
+		"f g\n    params[a[Int]]\n    return a\nprint g:1:2\n",
+	}
+	for _, src := range neutros {
+		err := runDjo(t, nil, src)
+		if err == nil || !strings.Contains(err.Error(), "espera") || strings.Contains(err.Error(), "parênteses") {
+			t.Errorf("%q: %v", src, err)
+		}
+	}
+	err := runDjo(t, nil, "f g\n    params[a[Int]]\n    return a\nprint g:1:len:\"x\"\n")
+	if err == nil || !strings.Contains(err.Error(), "'len' parece uma chamada") {
+		t.Errorf("%v", err)
+	}
+}
+
+func TestTimeSleepDizQueEEmMilissegundos(t *testing.T) {
+	in := NewInterp(io.Discard)
+	in.served = true
+	prog, _ := Parse("Time.sleep:3000\n")
+	if err := in.Run(prog); err == nil || !strings.Contains(err.Error(), "MILISSEGUNDOS") {
+		t.Errorf("%v", err)
 	}
 }
