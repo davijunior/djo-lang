@@ -1,4 +1,4 @@
-//go:build !noweb
+//go:build !noweb && !nonet
 
 package main
 
