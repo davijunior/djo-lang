@@ -151,7 +151,25 @@ func paramList(ps []Param) string {
 	return strings.Join(names, ", ")
 }
 
-const nestedCallHint = "se um dos argumentos é outra chamada (como trim:x), ponha-a entre parênteses: f:a:(trim:x)"
+// nestedCallSuspect: um argumento que é só o NOME de uma função (e não uma variável) é quase sempre uma chamada
+// aninhada sem parênteses (f:a:trim:x lê "trim" como argumento). Devolve a dica certa, ou "" se não é o caso.
+func (in *Interp) nestedCallSuspect(args []Expr, env *Env) string {
+	for _, a := range args {
+		id, ok := a.(*Ident)
+		if !ok {
+			continue
+		}
+		if _, isVar := env.get(id.Name); isVar {
+			continue
+		}
+		_, isFn := in.funcs[id.Name]
+		_, isBuiltin := builtins[id.Name]
+		if isFn || isBuiltin {
+			return fmt.Sprintf("; '%s' parece uma chamada usada como argumento: ponha-a entre parênteses (f:a:(%s:x)) ou guarde o resultado numa variável antes", id.Name, id.Name)
+		}
+	}
+	return ""
+}
 
 // opHint dá a dica certa quando um operador não serve para os tipos.
 func opHint(op Kind, l, r any) string {

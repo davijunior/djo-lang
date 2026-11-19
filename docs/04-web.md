@@ -395,11 +395,27 @@ lock{
 - **Chaves diferentes rodam em paralelo; a mesma chave, uma de cada vez**, na ordem de chegada (fila FIFO; no máximo 100 esperando por chave, a 101ª recebe `lock_busy` na hora).
 - **O bloco não é isolado** (ao contrário do `promise`): lê e escreve as variáveis de fora, e um `return` dentro dele **retorna da função que contém o `lock`** (retorno antecipado). `return`, `reject`, `redirect`, erro, `Spec.fail` e os limites de proteção soltam a trava. Dentro de um `promise{}`, um bloco que falha solta a trava.
 - **Não deu a vez em `wait`:** erro `lock_busy` (`err["code"]`), com `err["data"]` = `{"key": ..., "wait_s": ...}`. Pegue-o num `promise` e responda o que fizer sentido (o Hub responde 503 `erp_ocupado`).
-- **Numa página** o `wait` conta na mesma cota de **2 segundos** do `Time.sleep` (um `wait` que não cabe é um erro claro, não um ajuste). Num **job**, vale o que resta do `timeout` dele.
+- **Numa página** o `wait` conta na mesma cota de **2 segundos** do `Time.sleep` (atenção: o `wait` é em **segundos**, o `Time.sleep` é em **milissegundos**: `Time.sleep:1` dorme 1 ms, `Time.sleep:1000` dorme 1 s) (um `wait` que não cabe é um erro claro, não um ajuste). Num **job**, vale o que resta do `timeout` dele.
 - **Prazo (lease):** a trava vale 30 s numa página e o `timeout` do job num job (60 s em script). Passou disso, a trava é **cedida** ao próximo da fila e quem a segurava é interrompido no **próximo passo** com `lock_revoked` (um erro fatal, que o `promise` não captura). **Janela residual:** uma chamada `Http` ou `Db` que já estava em andamento pode terminar depois da cessão, e o que a execução antiga já gravou **não é desfeito**. Mantenha o corpo curto: a trava é para proteger uma chamada, não um processamento longo.
 - **Não pegue a trava dentro de `Db.begin`** (`lock_in_transaction`): esperar com a transação aberta prende o banco para quem já segura a trava. O contrário (`Db.begin` dentro do `lock`) é o uso certo. Pegar a mesma chave de novo na mesma execução é `lock_reentrant`. Chaves diferentes aninhadas são permitidas, mas pegue-as sempre na mesma ordem (A e depois B em todo lugar); no pior caso o `wait` termina em `lock_busy`.
 - **Só vale dentro do mesmo `djo serve`.** A trava fica na memória do processo: um script solto (`djo arquivo.djo`) ou outra instância do servidor é outro processo e **não é excluído**. Se um script de sincronização precisa respeitar a trava, rode-o como `Job`.
 - **Frequência de 503:** com a espera máxima de 2 s numa página e uma chamada externa de até 8 s, requisições simultâneas da mesma chave dão `lock_busy` com frequência. É o comportamento desejado: responda "tente de novo" em vez de empilhar.
+- **`return` e `promise`:** o `return` sai do bloco **mais próximo que o contém**. Num `lock` direto numa função, sai da função. Num `lock` **dentro de um `promise{}`**, sai do **promise** (o valor vai para o `success`, ou para `var r = uniq promise{...}`), não da função de fora:
+
+```
+var r = uniq promise{
+    lock{
+        key["omie:" + empresa + ":Listar"]
+        wait[2]
+        return Http.get:url      // sai do promise, com este valor
+    }
+}error{
+    [e]
+    return {"erro": e["code"]}   // "lock_busy" se não deu a vez
+}
+// aqui o código continua, com r
+```
+
 - No `djo spec`, `Spec.lock_hold:"chave"` simula **outra** execução segurando a trava (até `Spec.lock_release:"chave"` ou o fim do teste): assim se testa o 503 da página e o reagendamento do job.
 
 ## Limite de uso por chave: `Limit`

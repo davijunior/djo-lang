@@ -271,7 +271,7 @@ DJO_JOBS_HTTP=100 djo serve meusite
 | `Job.run: a função 'x' não existe no core/ do projeto` | o nome está errado, ou a função não está no `core/` |
 | `Job.run: 'x' precisa ter zero ou um parâmetro` | a função aceita só o mapa de argumentos |
 | `o job passou do tempo limite (timeout)` | aumente o `timeout` ou divida o trabalho em jobs menores |
-| `Time.sleep: páginas servidas podem esperar no máximo 2 segundos no total` | você dormiu mais de 2 s numa página ou `action`; passe o trabalho para um `Job.run` |
+| `Time.sleep: páginas servidas podem esperar no máximo 2 segundos no total` (o valor do `Time.sleep` é em **milissegundos**: `Time.sleep:2000` = 2 s) | você dormiu mais de 2 s numa página ou `action`; passe o trabalho para um `Job.run` |
 | `Time.sleep: o job pode esperar no máximo N segundos no total (o timeout)` | a soma dos `Time.sleep` do job passou do `timeout`; aumente o `timeout` ou espere menos |
 | `o job passou do limite de passos e foi interrompido` | o job tem um laço muito longo; divida o trabalho em jobs menores |
 | `o processo parou durante a tentativa (o lease venceu)` | o servidor caiu ou foi desligado no meio; o job foi reenfileirado |
