@@ -206,6 +206,26 @@ chamar um webhook.
 Todas aceitam, no fim, um `Map` de cabeçalhos: `Http.get:url:{"Authorization": "Bearer abc"}`
 e `Http.post:url:corpo:{"X-Chave": "abc"}`.
 
+**Timeout por chamada.** O padrão é 8 s. Depois dos cabeçalhos (use `nil` se não tem cabeçalhos) vai, opcional, o
+timeout: um número de segundos ou um texto como `"30s"` e `"2m"`. Vale para `get`, `post`, `put` e `delete`:
+
+```
+Http.get:url:nil:30                              // sem cabeçalhos, até 30 s
+Http.get:url:{"Authorization": "Bearer abc"}:"30s"
+Http.post:url:corpo:nil:"2m"
+```
+
+| Onde roda | Mínimo | Máximo por chamada |
+|-----------|--------|--------------------|
+| página e `action` servidas | 1 s | 20 s, e a **soma** das esperas de `Http` da página não passa de 25 s (o servidor corta a resposta em 30 s) |
+| job | 1 s | 60 s, e nunca mais do que resta do `timeout` do job |
+| `djo spec` e scripts | 1 s | 60 s |
+
+Pedir fora da faixa dá erro claro (`o timeout máximo aqui é 20 s`). Estourar o prazo **não** é erro: volta
+`{"ok": false, "status": 0, "error": "tempo esgotado (30 s)"}`. Se quem estoura é o prazo do **job**, no meio da
+chamada, o job é interrompido (erro fatal: o `promise` não pega e o `finally` não roda). Numa página, a cota de 25 s
+também corta as chamadas sem timeout (as de 8 s); depois dela a página para com erro.
+
 ```
 var r = Http.get:"https://api.exemplo.com/clima?cidade=rio"
 if
