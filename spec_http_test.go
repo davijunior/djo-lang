@@ -4,9 +4,12 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -261,5 +264,50 @@ func TestRedactURL(t *testing.T) {
 		if got != want {
 			t.Errorf("%s: %s (esperado %s)", in, got, want)
 		}
+	}
+}
+
+// O booster roda no mesmo interpretador do projeto: o mock vale para o Http que ele chama.
+func TestSpecHTTPMockVaiParaOBooster(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1) }))
+	defer srv.Close()
+	got := specStatuses(t, map[string]string{
+		"boosters/api/booster.json": `{"nome":"api","versao":"1.0.0","descricao":"teste","permissoes":["Http"]}`,
+		"boosters/api/main.djo":     "f busca\n    params[url[String]]\n    return (Http.get:url)[\"body\"]\n",
+		"spec/b_spec.djo": `f it_booster_usa_o_mock
+    Spec.http_mock:"GET":"` + srv.URL + `/b":{"body": "do mock"}
+    expect.eq:(api.busca:"` + srv.URL + `/b"):"do mock"
+`,
+	})
+	wantPassed(t, got, "booster usa o mock")
+	if hits.Load() != 0 {
+		t.Fatalf("o servidor real recebeu %d chamadas", hits.Load())
+	}
+}
+
+// Chamadas simultâneas ao mesmo mock (rode com -race): a sequência é consumida sem repetir nem perder.
+func TestHTTPMockConcorrente(t *testing.T) {
+	set := &httpMockSet{armed: true}
+	var seq []*httpMockResp
+	for i := 0; i < 200; i++ {
+		seq = append(seq, &httpMockResp{status: 200 + i%2, body: "x"})
+	}
+	set.rules = []*httpMockRule{{method: "GET", url: "https://api.x.com/s", resp: seq}}
+	u, _ := url.Parse("https://api.x.com/s")
+	var wg sync.WaitGroup
+	for g := 0; g < 20; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			in := NewInterp(io.Discard)
+			for i := 0; i < 10; i++ {
+				in.httpMockServe(set, "GET", "Http.get", u.String(), u, http.Header{"X-A": {"1"}}, "", 8*time.Second, 1)
+			}
+		}()
+	}
+	wg.Wait()
+	if len(set.calls) != 200 || set.rules[0].next != 200 {
+		t.Fatalf("calls=%d next=%d", len(set.calls), set.rules[0].next)
 	}
 }
