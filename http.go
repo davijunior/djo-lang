@@ -108,6 +108,11 @@ func init() {
 			}
 			return m
 		}},
+		// Http.request_id: o id da requisição (o mesmo que vai no log e no cabeçalho X-Request-Id da resposta)
+		"request_id": {0, func(in *Interp, env *Env, line int, a []any) any {
+			in.needWeb(line, "Http.request_id")
+			return in.req.Header.Get("X-Request-Id")
+		}},
 		// Http.ip: endereço de quem fez a requisição
 		"ip": {0, func(in *Interp, env *Env, line int, a []any) any {
 			in.needWeb(line, "Http.ip")

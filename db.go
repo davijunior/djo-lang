@@ -172,6 +172,9 @@ func dbSQL(a []any, fn string, line int) string {
 }
 
 func dbFail(fn string, line int, err error) {
+	if strings.Contains(err.Error(), "no such column: nil") {
+		failc(line, codeSQLNil, "%s: %v (em SQL o vazio é null, não nil; para passar nil use um parâmetro: Db.exec:\"... values (?)\":[nil])", fn, err)
+	}
 	fail(line, "%s: %v", fn, err)
 }
 

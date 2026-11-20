@@ -122,6 +122,12 @@ f sincronizar
 
 Para forçar um erro num teste, use `reject:"teste":"falhou de propósito"` (no lugar de uma conta como `1 / 0`). Um `Job.run` feito dentro de um `promise` que falha é descartado; o chamado dentro de um que dá certo segue a regra de sempre (fica retido até a página ou o job terminar sem erro). O limite de chamadas `Http` (20 por padrão) vale para a execução inteira do job, dentro ou fora de promises. Veja [Erros e promises](01-basico.md#erros-e-promises).
 
+## Trava (`lock`) em jobs
+
+Um job que usa [`lock`](04-web.md#trava-por-chave-lock) e não consegue a vez em `wait` falha com `lock_busy`. Se o erro **sai sem captura**, o job é **reagendado** (backoff de 5 s a 60 s) **sem gastar a tentativa**, no máximo 20 vezes; depois disso vale a falha normal. Enquanto espera, `Job.status:id` mostra `state: "waiting_lock"`, `lock_key` (a chave) e `lock_reschedules` (quantos reagendamentos já teve).
+
+> **Atenção, idempotência:** o job **reexecuta do começo** a cada reagendamento. O que ele fez **antes** do `lock` (gravar no banco, mandar e-mail, enfileirar outro job) **se repete**. Por isso, ponha o `lock` no **início** da função do job, antes de qualquer efeito.
+
 ## Onde fica a fila
 
 Num SQLite local: `_dados/jobs.db`, dentro da pasta do site. A pasta `_dados/` nunca é servida e, num app
@@ -265,7 +271,7 @@ DJO_JOBS_HTTP=100 djo serve meusite
 | `Job.run: a função 'x' não existe no core/ do projeto` | o nome está errado, ou a função não está no `core/` |
 | `Job.run: 'x' precisa ter zero ou um parâmetro` | a função aceita só o mapa de argumentos |
 | `o job passou do tempo limite (timeout)` | aumente o `timeout` ou divida o trabalho em jobs menores |
-| `Time.sleep: páginas servidas podem esperar no máximo 2 segundos no total` | você dormiu mais de 2 s numa página ou `action`; passe o trabalho para um `Job.run` |
+| `Time.sleep: páginas servidas podem esperar no máximo 2 segundos no total` (o valor do `Time.sleep` é em **milissegundos**: `Time.sleep:2000` = 2 s) | você dormiu mais de 2 s numa página ou `action`; passe o trabalho para um `Job.run` |
 | `Time.sleep: o job pode esperar no máximo N segundos no total (o timeout)` | a soma dos `Time.sleep` do job passou do `timeout`; aumente o `timeout` ou espere menos |
 | `o job passou do limite de passos e foi interrompido` | o job tem um laço muito longo; divida o trabalho em jobs menores |
 | `o processo parou durante a tentativa (o lease venceu)` | o servidor caiu ou foi desligado no meio; o job foi reenfileirado |

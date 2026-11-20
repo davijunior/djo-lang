@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"unicode"
 )
 
@@ -62,6 +63,9 @@ func (p *Parser) next() Token {
 func (p *Parser) expect(k Kind, what string) Token {
 	t := p.peek()
 	if t.Kind != k {
+		if _, kw := keywords[t.Text]; kw && strings.HasPrefix(what, "nome") {
+			failc(t.Line, codeReservedName, "esperava %s, mas %s", what, reservedHint(t.Text))
+		}
 		fail(t.Line, "esperava %s, encontrei %s", what, describe(t))
 	}
 	return p.next()
@@ -128,6 +132,9 @@ func (p *Parser) parseStmt() Stmt {
 		if p.promiseAt(p.pos, true) {
 			return &ExprStmt{p.parsePromise()}
 		}
+		if p.lockAt(p.pos) {
+			return p.parseLock()
+		}
 		p.strayClause()
 	case TplText:
 		p.next()
@@ -164,6 +171,9 @@ func (p *Parser) parseStmt() Stmt {
 	}
 	s := p.parseSimple()
 	if nt := p.peek(); nt.Kind != EOF && nt.Kind != RBrace && !nt.First {
+		if nt.Kind == Colon {
+			failc(nt.Line, codeNestedCall, "esperava fim de linha, encontrei ':' (um ':' a mais? depois de ':' vem o argumento; para usar o resultado de outra chamada como argumento, ponha-a entre parênteses: Http.bearer:(Env.get:\"TOKEN\"))")
+		}
 		fail(nt.Line, "esperava fim de linha, encontrei %s", describe(nt))
 	}
 	return s

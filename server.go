@@ -43,6 +43,8 @@ type Server struct {
 	maxSteps     int
 	allowPrivate bool // páginas podem chamar endereços internos (Http.get)
 	logger       *log.Logger
+	logFormat    string     // text (padrão) ou json
+	logIP        string     // trunc (padrão), full ou off
 	rmu          sync.Mutex // rotas.djo
 	rotas        *routeTable
 	rmod         time.Time
@@ -50,10 +52,12 @@ type Server struct {
 	lane         *lane // limites do tráfego de agentes
 	rcache       respCache
 	askx         askState
-	jobs         jobState // a fila de jobs (criada no primeiro uso)
-	mailSend     bool     // -dev: Mail.send envia de verdade em vez de gravar o .eml
-	mailBox      *mailBox // o djo spec: captura os e-mails
-	dbRoot       string   // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
+	jobs         jobState     // a fila de jobs (criada no primeiro uso)
+	mailSend     bool         // -dev: Mail.send envia de verdade em vez de gravar o .eml
+	mailBox      *mailBox     // o djo spec: captura os e-mails
+	httpMock     *httpMockSet // o djo spec: Http simulado
+	limiter      *limiter     // o djo spec: contadores do Limit
+	dbRoot       string       // pasta dos bancos; vazio = a do site (o djo spec usa uma temporária)
 }
 
 func NewServer(dir string, dev bool) (*Server, error) {
@@ -85,6 +89,29 @@ func NewServer(dir string, dev bool) (*Server, error) {
 type statusWriter struct {
 	http.ResponseWriter
 	status int
+	bytes  int64
+}
+
+// reqMeta guarda, para o log, o que só se sabe durante o atendimento (viaja no contexto da requisição).
+type reqMeta struct {
+	route   string // o padrão da rota que atendeu (nunca a URL: ela pode ter token)
+	errCode string
+}
+
+type reqMetaKey struct{}
+
+func metaOf(r *http.Request) *reqMeta {
+	m, _ := r.Context().Value(reqMetaKey{}).(*reqMeta)
+	if m == nil {
+		m = &reqMeta{} // fora do ServeHTTP (testes): grava num descartável
+	}
+	return m
+}
+
+func (w *statusWriter) Write(p []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(p)
+	w.bytes += int64(n)
+	return n, err
 }
 
 func (w *statusWriter) WriteHeader(code int) {
@@ -95,9 +122,26 @@ func (w *statusWriter) WriteHeader(code int) {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 	start := time.Now()
+	id := r.Header.Get("X-Request-Id")
+	if !requestIDRe.MatchString(id) {
+		id = newRequestID()
+		r.Header.Set("X-Request-Id", id)
+	}
+	sw.Header().Set("X-Request-Id", id)
+	meta := &reqMeta{}
+	r = r.WithContext(context.WithValue(r.Context(), reqMetaKey{}, meta))
 	s.route(sw, r)
 	if s.logger != nil {
-		s.logger.Printf("%s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
+		if s.logFormat == "json" {
+			route := meta.route
+			if route == "" {
+				route = "(sem rota)"
+			}
+			s.logJSON(reqLogLine{RequestID: id, Method: r.Method, Route: route, Status: sw.status,
+				MS: time.Since(start).Milliseconds(), Bytes: sw.bytes, IP: logIPOf(clientIP(r), s.logIP), ErrorCode: meta.errCode})
+		} else {
+			s.logger.Printf("%s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
+		}
 	}
 }
 
@@ -192,6 +236,9 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
+	if rel, err := filepath.Rel(s.root, file); err == nil { // roteamento por arquivo: o log mostra o ARQUIVO, nunca a URL
+		metaOf(r).route = filepath.ToSlash(rel)
+	}
 	real, err := filepath.EvalSymlinks(file)
 	if err != nil || !withinRoot(s.realRoot, real) {
 		s.notFound(w, r)
@@ -275,6 +322,8 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 	in.maxSteps = s.maxSteps
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
+	in.httpMock = s.httpMock
+	in.limiter = s.limiter
 	in.job = s.jobHost()
 	if err := in.loadCore(s.root); err != nil {
 		s.serverError(w, r, err)
@@ -316,13 +365,23 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, file string, st
 }
 
 func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) {
+	meta := metaOf(r)
+	meta.errCode = "internal_error"
+	if de, isDjo := err.(*djoError); isDjo && de.Code != "" {
+		meta.errCode = de.Code
+	}
 	if s.logger != nil {
-		s.logger.Printf("ERRO em %s: %v", r.URL.Path, err)
+		if s.logFormat == "json" {
+			s.logJSON(reqLogLine{Level: "error", RequestID: r.Header.Get("X-Request-Id"), Method: r.Method, Route: meta.route,
+				ErrorCode: meta.errCode, Msg: err.Error(), Stack: strings.TrimSpace(errTrace(err))})
+		} else {
+			s.logger.Printf("ERRO em %s: %v%s", r.URL.Path, err, errTrace(err))
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
 	if s.dev {
-		fmt.Fprintf(w, "<h1>Erro na página</h1><pre>%s</pre>", html.EscapeString(err.Error()))
+		fmt.Fprintf(w, "<h1>Erro na página</h1><pre>%s</pre>", html.EscapeString(err.Error()+errTrace(err)))
 		return
 	}
 	fmt.Fprint(w, "500 erro interno")
@@ -339,6 +398,8 @@ func serveCmd(args []string) int {
 	mailSend := fs.Bool("mail-send", false, "com -dev, Mail.send envia de verdade (por padrão grava o .eml em _saida/emails)")
 	allowPrivate := fs.Bool("allow-private", false, "deixa as páginas chamarem endereços internos (rede local) com Http.get/post")
 	jobsHTTP := fs.Int("jobs-http", jobHTTPCalls, "máximo de chamadas Http por execução de job, de 1 a 200 (também DJO_JOBS_HTTP; as páginas têm limite próprio)")
+	logFormat := fs.String("log-format", "", "formato do log: text (padrão) ou json, uma linha por requisição (também DJO_LOG_FORMAT)")
+	logIP := fs.String("log-ip", "", "IP no log: trunc (padrão: zera o último byte), full ou off (também DJO_LOG_IP)")
 	trusted := fs.String("trusted-proxy", "", "proxies confiáveis para X-Forwarded-Proto: IPs/CIDRs separados por vírgula, ou none (padrão: loopback; também DJO_TRUSTED_PROXY)")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -364,6 +425,11 @@ func serveCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
+	lf, li, err := logConfig(*logFormat, *logIP)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
 	dir := "."
 	if fs.NArg() > 0 {
 		dir = fs.Arg(0)
@@ -380,7 +446,12 @@ func serveCmd(args []string) int {
 		return 2
 	}
 	srv.lane = newLane(*agentConc, *agentRate)
-	srv.logger = log.New(os.Stderr, "", log.LstdFlags)
+	srv.logFormat, srv.logIP = lf, li
+	flags := log.LstdFlags
+	if lf == "json" {
+		flags = 0 // a linha JSON já tem o ts
+	}
+	srv.logger = log.New(scrubWriter{os.Stderr}, "", flags)
 	srv.jobsBoot(*jobWorkers) // depois do logger: o aviso de fila e de agenda inválida precisa aparecer
 
 	hs := &http.Server{

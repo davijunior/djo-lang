@@ -37,6 +37,7 @@ func (in *Interp) loadCore(root string) error {
 		for _, s := range prog {
 			switch d := s.(type) {
 			case *FuncDecl:
+				d.File, _ = filepath.Rel(root, f)
 				in.funcs[d.Name] = d
 			case *StructDecl:
 				in.declare(d.Name, d.Line, d, nil)
@@ -74,6 +75,8 @@ func lineOf(s Stmt) int {
 	case *WhileStmt:
 		return n.Line
 	case *UntilStmt:
+		return n.Line
+	case *LockStmt:
 		return n.Line
 	}
 	return 0

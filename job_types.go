@@ -392,6 +392,8 @@ func jobStatusMap(id int64, fn, state string, tries, maxTries int, runAt, create
 	} else {
 		m.set("error", nil)
 	}
+	m.set("lock_reschedules", int64(0))
+	m.set("lock_key", nil)
 	return m
 }
 
@@ -726,6 +728,8 @@ var specRunJobs = func(in *Interp, c *specCtx, only int64, line int) any {
 		child := newJobInterp(in.root, in.dbRoot, &jobOut{}, next.req.Timeout, host)
 		child.maxSteps = specMaxSteps
 		child.spec = c
+		child.httpMock = c.http
+		child.limiter = c.lim
 		var err error
 		if lerr := child.loadCore(in.root); lerr != nil {
 			err = lerr

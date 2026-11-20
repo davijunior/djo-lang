@@ -105,6 +105,9 @@ type Interp struct {
 	serial          serialState
 	served          bool          // páginas servidas não alcançam endereços internos
 	outCalls        int           // chamadas externas feitas nesta página
+	locks           []*lockHold   // travas (lock{}) que esta execução segura agora
+	limiter         *limiter      // o djo spec: contadores de Limit próprios (nil: os do processo)
+	httpMock        *httpMockSet  // o djo spec: respostas de Http simuladas (nil fora do spec)
 	outWaited       time.Duration // tempo já esperado em chamadas externas nesta página
 	slept           int64         // ms de Time.sleep nesta página (servidor)
 	wrote           int           // bytes gravados por File.* nesta página (servidor)
@@ -178,6 +181,9 @@ func (in *Interp) execBlock(stmts []Stmt, env *Env) (any, bool) {
 
 func (in *Interp) tick() {
 	in.steps++
+	if len(in.locks) > 0 {
+		in.lockCheck()
+	}
 	if in.maxSteps > 0 && in.steps > in.maxSteps {
 		if in.spec != nil {
 			failFatal(0, "o spec passou do limite de passos (um laço sem fim?) e foi interrompido")
@@ -270,6 +276,10 @@ func (in *Interp) exec(s Stmt, env *Env) (any, bool) {
 			fail(n.Line, "'%s' é %s e não pode receber %s", n.Name, typ, typeName(nv))
 		} else if res == outerLocked {
 			fail(n.Line, outerMsg, n.Name)
+		}
+	case *LockStmt:
+		if v, returned := in.execLock(n, env); returned {
+			return v, true
 		}
 	case *WhileStmt:
 		loop := newEnv(env)
@@ -448,7 +458,10 @@ func (in *Interp) eval(e Expr, env *Env) any {
 			if _, isFn := in.funcs[n.Name]; isFn {
 				fail(n.Line, "'%s' é uma função; para chamar use '%s:'", n.Name, n.Name)
 			}
-			fail(n.Line, "variável '%s' não existe", n.Name)
+			if _, isNS := natives[n.Name]; isNS {
+				failc(n.Line, codeNamespaceValue, "'%s' é um namespace, não um valor: chame uma função dele (%s.nome:...). Se isto estava dentro de outra chamada, ponha-a entre parênteses: Http.json:(Json.decode:x)", n.Name, n.Name)
+			}
+			failc(n.Line, codeUnknownName, "variável '%s' não existe%s", n.Name, didYouMean(n.Name, in.visibleNames(env)))
 		}
 		if h, isP := v.(*promiseHandle); isP {
 			return in.await(h)
@@ -520,7 +533,12 @@ func (in *Interp) eval(e Expr, env *Env) any {
 			rs := []rune(b)
 			return string(rs[in.checkIndex(idx, len(rs), n.Line)])
 		}
-		fail(n.Line, "só dá para usar [ ] em Arr, Map ou String, e isso é %s", typeName(base))
+		if base == nil {
+			if d := exprDesc(n.X); d != "" {
+				failc(n.Line, codeNilIndex, "só dá para usar [ ] em Arr, Map ou String, mas %s é nil (a chave existe? o Db.one achou a linha?)", d)
+			}
+		}
+		failc(n.Line, codeNilIndex, "só dá para usar [ ] em Arr, Map ou String, e isso é %s", typeName(base))
 	case *Input:
 		if n.Prompt != nil {
 			fmt.Fprint(in.out, in.eval(n.Prompt, env))
@@ -560,13 +578,27 @@ func (in *Interp) call(n *Call, env *Env) any {
 	if b, ok := builtins[n.Name]; ok {
 		return in.callBuiltin(b, n, env)
 	}
-	fail(n.Line, "função ou struct '%s' não existe", n.Name)
+	var cands []string
+	for k := range in.funcs {
+		cands = append(cands, k)
+	}
+	for k := range in.structs {
+		cands = append(cands, k)
+	}
+	for k := range builtins {
+		cands = append(cands, k)
+	}
+	failc(n.Line, codeUnknownName, "função ou struct '%s' não existe%s", n.Name, didYouMean(n.Name, cands))
 	return nil
 }
 
 func (in *Interp) callBuiltin(b builtin, n *Call, env *Env) any {
 	if b.args >= 0 && len(n.Args) != b.args {
-		fail(n.Line, "'%s' espera %d argumento(s), recebeu %d", n.Name, b.args, len(n.Args))
+		extra := ""
+		if len(n.Args) > b.args {
+			extra = in.nestedCallSuspect(n.Args, env)
+		}
+		failc(n.Line, codeArity, "'%s' espera %d argumento(s), recebeu %d%s", n.Name, b.args, len(n.Args), extra)
 	}
 	if in.prom > 0 {
 		in.promiseGuard(n.Name, n.Line)
@@ -581,7 +613,11 @@ func (in *Interp) callBuiltin(b builtin, n *Call, env *Env) any {
 // invoke executa uma função ou método; self é a instância (nil em funções).
 func (in *Interp) invoke(fd *FuncDecl, label string, args []Expr, env *Env, self *Instance, line int) any {
 	if len(args) != len(fd.Params) {
-		fail(line, "'%s' espera %d argumento(s), recebeu %d", label, len(fd.Params), len(args))
+		extra := ""
+		if len(args) > len(fd.Params) {
+			extra = in.nestedCallSuspect(args, env)
+		}
+		failc(line, codeArity, "'%s' espera %d argumento(s) (%s), recebeu %d%s", label, len(fd.Params), paramList(fd.Params), len(args), extra)
 	}
 	local := newEnv(in.global)
 	if self != nil {
@@ -603,6 +639,18 @@ func (in *Interp) invoke(fd *FuncDecl, label string, args []Expr, env *Env, self
 	}
 	in.depth++
 	defer func() { in.depth-- }()
+	defer func() { // o erro que passa por aqui anota a função na pilha
+		if r := recover(); r != nil {
+			if de, ok := r.(*djoError); ok {
+				file := fd.File
+				if fd.Booster != nil {
+					file = boostersDir + "/" + fd.Booster.name
+				}
+				de.addFrame(label, file, line)
+			}
+			panic(r)
+		}
+	}()
 	if in.depth > maxDepth {
 		failFatal(line, "recursão funda demais em '%s'", label)
 	}
@@ -743,8 +791,8 @@ func (in *Interp) binary(n *Binary, env *Env) any {
 		}
 	}
 
-	fail(n.Line, "não dá para usar '%s' entre %s e %s",
-		opText(n.Op), typeName(l), typeName(r))
+	failc(n.Line, codeOpTypes, "não dá para usar '%s' entre %s e %s%s",
+		opText(n.Op), typeName(l), typeName(r), opHint(n.Op, l, r))
 	return nil
 }
 

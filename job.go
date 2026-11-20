@@ -5,6 +5,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -89,6 +90,9 @@ func openJobQueue(path string, create bool) (*jobQueue, error) {
 	if _, err := db.Exec(jobSchema); err != nil {
 		return nil, err
 	}
+	// colunas da trava (filas criadas por versões antigas não as têm; o erro de "coluna duplicada" é esperado)
+	db.Exec(`ALTER TABLE jobs ADD COLUMN lock_resched INTEGER NOT NULL DEFAULT 0`)
+	db.Exec(`ALTER TABLE jobs ADD COLUMN lock_key TEXT NOT NULL DEFAULT ''`)
 	return &jobQueue{db: db, path: path}, nil
 }
 
@@ -167,7 +171,7 @@ func (q *jobQueue) claim(now time.Time) (*jobRow, error) {
 	defer q.mu.Unlock()
 	t := now.Unix()
 	j := &jobRow{state: "running"}
-	err := q.db.QueryRow(`UPDATE jobs SET state='running', tries=tries+1, lease_until=?+timeout_s+?
+	err := q.db.QueryRow(`UPDATE jobs SET state='running', tries=tries+1, lock_key='', lease_until=?+timeout_s+?
 		WHERE id=(SELECT id FROM jobs WHERE state='queued' AND run_at<=? ORDER BY run_at, id LIMIT 1)
 		RETURNING id, fn, args, tries, max_tries, timeout_s, sched`, t, int(jobLease/time.Second), t).
 		Scan(&j.id, &j.fn, &j.args, &j.tries, &j.maxTries, &j.timeoutS, &j.sched)
@@ -225,6 +229,34 @@ func (q *jobQueue) fail(id int64, msg string, now time.Time, permanent bool, att
 	}
 	q.db.Exec(`UPDATE jobs SET state='queued', error=?, run_at=?, lease_until=0 WHERE id=?`, msg, now.Add(jobJitter(jobBackoff(tries))).Unix(), id)
 	return false
+}
+
+const jobMaxLockResched = 20
+
+// deferLock reagenda um job que não conseguiu a trava, SEM gastar a tentativa (com backoff de 5 s a 60 s).
+// Devolve false quando já foram reagendamentos demais (aí vale a falha normal).
+func (q *jobQueue) deferLock(id int64, key, msg string, now time.Time, attempt int) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	var n int
+	if q.db.QueryRow(`SELECT lock_resched FROM jobs WHERE id=? AND state='running' AND tries=?`, id, attempt).Scan(&n) != nil || n >= jobMaxLockResched {
+		return false
+	}
+	delay := 5 * time.Second << min(n, 4) // 5, 10, 20, 40, 80 -> teto de 60
+	if delay > time.Minute {
+		delay = time.Minute
+	}
+	q.db.Exec(`UPDATE jobs SET state='queued', tries=tries-1, lock_resched=lock_resched+1, lock_key=?, error=?, run_at=?, lease_until=0 WHERE id=?`,
+		jobClip(key), jobClip(msg), now.Add(jobJitter(delay)).Unix(), id)
+	return true
+}
+
+// lockInfo: quantos reagendamentos por trava o job já teve e a chave pela qual espera ("" se não espera).
+func (q *jobQueue) lockInfo(id int64) (resched int, key string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.db.QueryRow(`SELECT lock_resched, lock_key FROM jobs WHERE id=?`, id).Scan(&resched, &key)
+	return
 }
 
 // sweep devolve à fila o que ficou running com o lease vencido e limpa o que já passou da retenção.
@@ -466,7 +498,14 @@ func (e *jobEngine) status(id int64) *Map {
 	if st == "held" {
 		st = "queued"
 	}
-	return jobStatusMap(j.id, j.fn, st, j.tries, j.maxTries, j.runAt, j.created, j.finished, j.err)
+	m := jobStatusMap(j.id, j.fn, st, j.tries, j.maxTries, j.runAt, j.created, j.finished, j.err)
+	resched, key := e.q.lockInfo(j.id)
+	m.set("lock_reschedules", int64(resched))
+	if st == "queued" && key != "" {
+		m.set("state", "waiting_lock")
+		m.set("lock_key", key)
+	}
+	return m
 }
 
 func (e *jobEngine) cancel(id int64) bool { return e.q.cancel(id, e.now()) }
@@ -530,6 +569,19 @@ func (e *jobEngine) runOne(j *jobRow) {
 		e.logf("job %d %s: ok (%s)", j.id, j.fn, time.Since(t0).Round(time.Millisecond))
 		return
 	}
+	var de *djoError
+	if errors.As(err, &de) && de.Code == "lock_busy" && !giveUp {
+		key := ""
+		if m, ok := de.Data.(*Map); ok {
+			if v, ok := m.get("key"); ok {
+				key, _ = v.(string)
+			}
+		}
+		if e.q.deferLock(j.id, key, err.Error(), now, j.tries) {
+			e.logf("job %d %s: esperando a trava %q, reagendado sem gastar tentativa: %v", j.id, j.fn, key, err)
+			return
+		}
+	}
 	dead := e.q.fail(j.id, err.Error(), now, giveUp, j.tries)
 	if dead {
 		e.logf("job %d %s: FALHOU de vez (tentativa %d/%d): %v", j.id, j.fn, j.tries, j.maxTries, err)
@@ -546,6 +598,8 @@ func (e *jobEngine) execute(j *jobRow) (bool, error) {
 	in := newJobInterp(s.root, s.dbRoot, out, time.Duration(j.timeoutS)*time.Second, host)
 	in.served = !s.allowPrivate
 	in.mail = s.mailHost()
+	in.httpMock = s.httpMock
+	in.limiter = s.limiter
 	if err := in.loadCore(s.root); err != nil {
 		return false, err
 	}
